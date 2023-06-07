@@ -1,8 +1,127 @@
 # Changelog
+## v1.2.4
+FEATURE
+* [\#1636](https://github.com/bnb-chain/bsc/pull/1636) upgrade: block height of Luban on mainnet
+
+## v1.2.3
+FEATURE
+* [\#1574](https://github.com/bnb-chain/bsc/pull/1574) upgrade: update PlatoUpgrade contracts code
+* [\#1594](https://github.com/bnb-chain/bsc/pull/1594) upgrade: block height of Plato on testnet
+
+IMPROVEMENT
+* [\#866](https://github.com/bnb-chain/bsc/pull/866) code: x = append(y) is equivalent to x = y
+* [\#1488](https://github.com/bnb-chain/bsc/pull/1488) eth/tracers, core/vm: remove `time` from trace output and tracing interface
+* [\#1547](https://github.com/bnb-chain/bsc/pull/1547) fix: recently signed check when slashing unavailable validator
+* [\#1573](https://github.com/bnb-chain/bsc/pull/1573) feat: remove supports for legacy proof type
+* [\#1576](https://github.com/bnb-chain/bsc/pull/1576) fix: support golang 1.20 by upgrading prysm to v4
+* [\#1578](https://github.com/bnb-chain/bsc/pull/1578) fix: output an error log when bsc extension fail to handshake
+* [\#1583](https://github.com/bnb-chain/bsc/pull/1583) metrics: add a counter for validator to check work status of voting
+
+BUGFIX
+* [\#1566](https://github.com/bnb-chain/bsc/pull/1566) fix: config for VoteJournalDir and BLSWalletDir
+* [\#1572](https://github.com/bnb-chain/bsc/pull/1572) fix: remove dynamic metric labels about fast finality
+* [\#1575](https://github.com/bnb-chain/bsc/pull/1575) fix: make BLST PORTABLE for release binary
+* [\#1590](https://github.com/bnb-chain/bsc/pull/1590) fix: fix snap flaky tests
+
+## v1.2.2
+It was skipped by a mistake, replaced by v1.2.3
+
+## v1.2.1
+IMPROVEMENT
+* [\#1527](https://github.com/bnb-chain/bsc/pull/1527) log: revert a log back to trace level
+
+## v1.2.0
+FEATURE
+* [\#936](https://github.com/bnb-chain/bsc/pull/936) BEP-126: Introduce Fast Finality Mechanism
+* [\#1325](https://github.com/bnb-chain/bsc/pull/1325) genesis: add BEP174 changes to relayer contract
+* [\#1357](https://github.com/bnb-chain/bsc/pull/1357) Integration API for EIP-4337 bundler with an L2 validator/sequencer
+* [\#1463](https://github.com/bnb-chain/bsc/pull/1463) BEP-221: implement cometBFT light block validation
+* [\#1493](https://github.com/bnb-chain/bsc/pull/1493) bep: update the bytecode of luban fork after the contract release
+
+IMPROVEMENT
+* [\#1486](https://github.com/bnb-chain/bsc/pull/1486) feature: remove diff protocol registration
+* [\#1434](https://github.com/bnb-chain/bsc/pull/1434) fix: improvements after testing fast finality
+
+BUGFIX
+* [\#1430](https://github.com/bnb-chain/bsc/pull/1430) docker: upgrade alpine version & remove apks version
+* [\#1458](https://github.com/bnb-chain/bsc/pull/1458) cmd/faucet: clear reqs list when reorg to lower nonce
+* [\#1484](https://github.com/bnb-chain/bsc/pull/1484) fix: a deadlock caused by bsc protocol handeshake timeout
+
+## v1.1.23
+BUGFIX
+* [\#1464](https://github.com/bnb-chain/bsc/pull/1464) fix: panic on using WaitGroup after it is freed
+
+## v1.1.22
+FEATURE
+* [\#1361](https://github.com/bnb-chain/bsc/pull/1361) cmd/faucet: merge ipfaucet2 branch to develop
+
+IMPROVEMENT
+* [\#1412](https://github.com/bnb-chain/bsc/pull/1412) fix: init-network with config.toml without setting TimeFormat
+* [\#1401](https://github.com/bnb-chain/bsc/pull/1401) log: support custom time format configuration
+* [\#1382](https://github.com/bnb-chain/bsc/pull/1382) consnesus/parlia: abort sealing when block in the same height has updated
+* [\#1383](https://github.com/bnb-chain/bsc/pull/1383) miner: no need to broadcast sidechain header mined by this validator
+
+BUGFIX
+* [\#1379](https://github.com/bnb-chain/bsc/pull/1379) UT: fix some flaky tests
+* [\#1403](https://github.com/bnb-chain/bsc/pull/1403) Makefile: fix devtools install error
+* [\#1381](https://github.com/bnb-chain/bsc/pull/1381) fix: snapshot generation issue after chain reinit from a freezer
+
+## v1.1.21
+FEATURE
+* [\#1389](https://github.com/bnb-chain/bsc/pull/1389) upgrade: update the fork height of planck upgrade on mainnet
+
+BUGFIX
+* [\#1354](https://github.com/bnb-chain/bsc/pull/1354) fix: add some boundary check for security
+* [\#1373](https://github.com/bnb-chain/bsc/pull/1373) tracer: enable withLog for TraceCall
+* [\#1377](https://github.com/bnb-chain/bsc/pull/1377) miner: add fallthrough for switch cases
+
+## v1.1.20
+FEATURE
+* [\#1322](https://github.com/bnb-chain/bsc/pull/1322) cmd/utils/flags.go: --diffsync flag is deprecate
+* [\#1261](https://github.com/bnb-chain/bsc/pull/1261) tracer: port call tracer `withLog` to bsc
+
+IMPROVEMENT
+* [\#1337](https://github.com/bnb-chain/bsc/pull/1337) clean: Remove support for Ethereum testnet
+* [\#1347](https://github.com/bnb-chain/bsc/pull/1347) upgrade: update the fork height of planck upgrade on testnet
+* [\#1343](https://github.com/bnb-chain/bsc/pull/1343) upgrade: update system contracts' code of planck upgrade
+* [\#1328](https://github.com/bnb-chain/bsc/pull/1328) upgrade: update system contracts' code of testnet
+* [\#1162](https://github.com/bnb-chain/bsc/pull/1162) consensus: fix slash bug when validator set changing
+* [\#1344](https://github.com/bnb-chain/bsc/pull/1344) consensus: fix delete the 1st validator from snapshot.recents list
+* [\#1149](https://github.com/bnb-chain/bsc/pull/1149) feats: add ics23 proof support for cross chain packages
+* [\#1333](https://github.com/bnb-chain/bsc/pull/1333) sec: add proof ops check and key checker
+
+BUGFIX
+* [\#1348](https://github.com/bnb-chain/bsc/pull/1348) core/txpool: implement additional DoS defenses
+
+## v1.1.19
+FEATURE
+* [\#1199](https://github.com/bnb-chain/bsc/pull/1199) mointor: implement double sign monitor
+
+IMPROVEMENT
+* [\#1226](https://github.com/bnb-chain/bsc/pull/1226) eth, trie: sync with upstream v1.10.26 to solve snap sync issues
+* [\#1212](https://github.com/bnb-chain/bsc/pull/1212) metrics: add miner info into metrics server
+* [\#1240](https://github.com/bnb-chain/bsc/pull/1240) Add NewBatchWithSize API for db and use this API for BloomIndexer.Commit()
+* [\#1254](https://github.com/bnb-chain/bsc/pull/1254) ci: update unmaintained tools to use maintained tools
+* [\#1256](https://github.com/bnb-chain/bsc/pull/1256) ci: disable CGO_ENABLED when building binary
+* [\#1274](https://github.com/bnb-chain/bsc/pull/1274) dep: bump the version of several important library
+* [\#1294](https://github.com/bnb-chain/bsc/pull/1294) parlia : add a check for the length of extraData.
+* [\#1298](https://github.com/bnb-chain/bsc/pull/1298) dep: update tendermint to v0.31.14
+
+Document
+* [\#1233](https://github.com/bnb-chain/bsc/pull/1233) doc: update readme
+* [\#1245](https://github.com/bnb-chain/bsc/pull/1245) comments: add comments to clarify flags and byte codes
+* [\#1266](https://github.com/bnb-chain/bsc/pull/1266) docs: update the readme to latest
+* [\#1267](https://github.com/bnb-chain/bsc/pull/1267) docs: minor fix about the readme
+* [\#1287](https://github.com/bnb-chain/bsc/pull/1287) docs: minor fix on geth links
+
+BUGFIX
+* [\#1233](https://github.com/bnb-chain/bsc/pull/1233) doc: update readme
+* [\#1253](https://github.com/bnb-chain/bsc/pull/1253) fix comments: prune ancient compatibility, add prune ancient comments
+* [\#1301](https://github.com/bnb-chain/bsc/pull/1301) fix: p2p sync with lagging peer
+* [\#1302](https://github.com/bnb-chain/bsc/pull/1302) fix: eth fetcher re-queue issue
 
 ## v1.1.18
 IMPROVEMENT
-
 * [\#1209](https://github.com/bnb-chain/bsc/pull/1209) metrics: add build info into metrics server
 * [\#1204](https://github.com/bnb-chain/bsc/pull/1204) worker: NewTxsEvent and triePrefetch reuse in mining task
 * [\#1195](https://github.com/bnb-chain/bsc/pull/1195) hardfork: update Gibbs fork height and system contract code

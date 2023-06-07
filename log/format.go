@@ -14,9 +14,12 @@ import (
 	"unicode/utf8"
 )
 
+var (
+	timeFormat     = "2006-01-02T15:04:05-0700"
+	termTimeFormat = "01-02|15:04:05.000"
+)
+
 const (
-	timeFormat        = "2006-01-02T15:04:05-0700"
-	termTimeFormat    = "01-02|15:04:05.000"
 	floatFormat       = 'f'
 	termMsgJust       = 40
 	termCtxMaxPadding = 40
@@ -79,12 +82,11 @@ type TerminalStringer interface {
 // a terminal with color-coded level output and terser human friendly timestamp.
 // This format should only be used for interactive programs or while developing.
 //
-//     [LEVEL] [TIME] MESSAGE key=value key=value ...
+//	[LEVEL] [TIME] MESSAGE key=value key=value ...
 //
 // Example:
 //
-//     [DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
-//
+//	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
 func TerminalFormat(usecolor bool) Format {
 	return FormatFunc(func(r *Record) []byte {
 		var color = 0
@@ -149,7 +151,6 @@ func TerminalFormat(usecolor bool) Format {
 // format for key/value pairs.
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
-//
 func LogfmtFormat() Format {
 	return FormatFunc(func(r *Record) []byte {
 		common := []interface{}{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
@@ -483,4 +484,12 @@ func escapeString(s string) string {
 		return s
 	}
 	return strconv.Quote(s)
+}
+
+func SetTermTimeFormat(format string) {
+	termTimeFormat = format
+}
+
+func SetTimeFormat(format string) {
+	timeFormat = format
 }
