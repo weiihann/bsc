@@ -737,10 +737,10 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 }
 
 // GetBlockByNumber returns the requested canonical block.
-// * When blockNr is -1 the chain head is returned.
-// * When blockNr is -2 the pending chain head is returned.
-// * When fullTx is true all transactions in the block are returned, otherwise
-//   only the transaction hash is returned.
+//   - When blockNr is -1 the chain head is returned.
+//   - When blockNr is -2 the pending chain head is returned.
+//   - When fullTx is true all transactions in the block are returned, otherwise
+//     only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
@@ -2132,6 +2132,24 @@ func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args Tra
 func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
+		return common.Hash{}, err
+	}
+	return SubmitTransaction(ctx, s.b, tx)
+}
+
+// SendRawTransactionConditional will add the signed transaction to the transaction pool.
+// The sender/bundler is responsible for signing the transaction
+func (s *PublicTransactionPoolAPI) SendRawTransactionConditional(ctx context.Context, input hexutil.Bytes, opts TransactionOpts) (common.Hash, error) {
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(input); err != nil {
+		return common.Hash{}, err
+	}
+	header := s.b.CurrentHeader()
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, rpc.BlockNumber(header.Number.Int64()))
+	if state == nil || err != nil {
+		return common.Hash{}, err
+	}
+	if err := opts.Check(header.Number.Uint64(), header.Time, state); err != nil {
 		return common.Hash{}, err
 	}
 	return SubmitTransaction(ctx, s.b, tx)

@@ -21,7 +21,6 @@ import (
 	"math/big"
 	"strconv"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -37,14 +36,15 @@ func init() {
 // a reversed signature can be matched against the size of the data.
 //
 // Example:
-//   > debug.traceTransaction( "0x214e597e35da083692f5386141e69f47e973b2c56e7a8073b1ea08fd7571e9de", {tracer: "4byteTracer"})
-//   {
-//     0x27dc297e-128: 1,
-//     0x38cc4831-0: 2,
-//     0x524f3889-96: 1,
-//     0xadf59f99-288: 1,
-//     0xc281d19e-0: 1
-//   }
+//
+//	> debug.traceTransaction( "0x214e597e35da083692f5386141e69f47e973b2c56e7a8073b1ea08fd7571e9de", {tracer: "4byteTracer"})
+//	{
+//	  0x27dc297e-128: 1,
+//	  0x38cc4831-0: 2,
+//	  0x524f3889-96: 1,
+//	  0xadf59f99-288: 1,
+//	  0xc281d19e-0: 1
+//	}
 type fourByteTracer struct {
 	env               *vm.EVM
 	ids               map[string]int   // ids aggregates the 4byte ids found
@@ -128,7 +128,7 @@ func (t *fourByteTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64,
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
+func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 }
 
 func (*fourByteTracer) CaptureTxStart(gasLimit uint64) {}

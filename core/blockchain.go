@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/monitor"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -53,6 +54,9 @@ var (
 	headBlockGauge     = metrics.NewRegisteredGauge("chain/head/block", nil)
 	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
 	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
+
+	justifiedBlockGauge = metrics.NewRegisteredGauge("chain/head/justified", nil)
+	finalizedBlockGauge = metrics.NewRegisteredGauge("chain/head/finalized", nil)
 
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
@@ -199,16 +203,17 @@ type BlockChain struct {
 	txLookupLimit uint64
 	triesInMemory uint64
 
-	hc             *HeaderChain
-	rmLogsFeed     event.Feed
-	chainFeed      event.Feed
-	chainSideFeed  event.Feed
-	chainHeadFeed  event.Feed
-	chainBlockFeed event.Feed
-	logsFeed       event.Feed
-	blockProcFeed  event.Feed
-	scope          event.SubscriptionScope
-	genesisBlock   *types.Block
+	hc                  *HeaderChain
+	rmLogsFeed          event.Feed
+	chainFeed           event.Feed
+	chainSideFeed       event.Feed
+	chainHeadFeed       event.Feed
+	chainBlockFeed      event.Feed
+	logsFeed            event.Feed
+	blockProcFeed       event.Feed
+	finalizedHeaderFeed event.Feed
+	scope               event.SubscriptionScope
+	genesisBlock        *types.Block
 
 	// This mutex synchronizes chain write operations.
 	// Readers don't need to take it, they can just read the database.
@@ -258,6 +263,9 @@ type BlockChain struct {
 
 	shouldPreserve  func(*types.Block) bool        // Function used to determine whether should preserve the given block.
 	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
+
+	// monitor
+	doubleSignMonitor *monitor.DoubleSignMonitor
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -504,6 +512,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		bc.wg.Add(1)
 		go bc.rewindInvalidHeaderBlockLoop()
 	}
+
+	if bc.doubleSignMonitor != nil {
+		bc.wg.Add(1)
+		go bc.startDoubleSignMonitor()
+
+	}
+
 	return bc, nil
 }
 
@@ -579,6 +594,30 @@ func (bc *BlockChain) empty() bool {
 	return true
 }
 
+// GetJustifiedNumber returns the highest justified blockNumber on the branch including and before `header`.
+func (bc *BlockChain) GetJustifiedNumber(header *types.Header) uint64 {
+	if p, ok := bc.engine.(consensus.PoSA); ok {
+		justifiedBlockNumber, _, err := p.GetJustifiedNumberAndHash(bc, header)
+		if err == nil {
+			return justifiedBlockNumber
+		}
+	}
+	// return 0 when err!=nil
+	// so the input `header` will at a disadvantage during reorg
+	return 0
+}
+
+// getFinalizedNumber returns the highest finalized number before the specific block.
+func (bc *BlockChain) getFinalizedNumber(header *types.Header) uint64 {
+	if p, ok := bc.engine.(consensus.PoSA); ok {
+		if finalizedHeader := p.GetFinalizedHeader(bc, header); finalizedHeader != nil {
+			return finalizedHeader.Number.Uint64()
+		}
+	}
+
+	return 0
+}
+
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState() error {
@@ -600,6 +639,8 @@ func (bc *BlockChain) loadLastState() error {
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock.Store(currentBlock)
 	headBlockGauge.Update(int64(currentBlock.NumberU64()))
+	justifiedBlockGauge.Update(int64(bc.GetJustifiedNumber(currentBlock.Header())))
+	finalizedBlockGauge.Update(int64(bc.getFinalizedNumber(currentBlock.Header())))
 
 	// Restore the last known head header
 	currentHeader := currentBlock.Header()
@@ -748,6 +789,8 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 			// to low, so it's safe to update in-memory markers directly.
 			bc.currentBlock.Store(newHeadBlock)
 			headBlockGauge.Update(int64(newHeadBlock.NumberU64()))
+			justifiedBlockGauge.Update(int64(bc.GetJustifiedNumber(newHeadBlock.Header())))
+			finalizedBlockGauge.Update(int64(bc.getFinalizedNumber(newHeadBlock.Header())))
 		}
 		// Rewind the fast block in a simpleton way to the target head
 		if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock != nil && header.Number.Uint64() < currentFastBlock.NumberU64() {
@@ -838,6 +881,8 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 	}
 	bc.currentBlock.Store(block)
 	headBlockGauge.Update(int64(block.NumberU64()))
+	justifiedBlockGauge.Update(int64(bc.GetJustifiedNumber(block.Header())))
+	finalizedBlockGauge.Update(int64(bc.getFinalizedNumber(block.Header())))
 	bc.chainmu.Unlock()
 
 	// Destroy any existing state snapshot and regenerate it in the background,
@@ -884,6 +929,8 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	bc.genesisBlock = genesis
 	bc.currentBlock.Store(bc.genesisBlock)
 	headBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
+	justifiedBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
+	finalizedBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
 	bc.currentFastBlock.Store(bc.genesisBlock)
@@ -955,6 +1002,8 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block) {
 
 	bc.currentBlock.Store(block)
 	headBlockGauge.Update(int64(block.NumberU64()))
+	justifiedBlockGauge.Update(int64(bc.GetJustifiedNumber(block.Header())))
+	finalizedBlockGauge.Update(int64(bc.getFinalizedNumber(block.Header())))
 }
 
 // GetDiffLayerRLP retrieves a diff layer in RLP encoding from the cache or database by blockHash
@@ -1192,7 +1241,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 		// Rewind may have occurred, skip in that case.
 		if bc.CurrentHeader().Number.Cmp(head.Number()) >= 0 {
-			reorg, err := bc.forker.ReorgNeeded(bc.CurrentFastBlock().Header(), head.Header())
+			reorg, err := bc.forker.ReorgNeededWithFastFinality(bc.CurrentFastBlock().Header(), head.Header())
 			if err != nil {
 				log.Warn("Reorg failed", "err", err)
 				return false
@@ -1535,14 +1584,20 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					}
 				}
 				// Garbage collect anything below our required write retention
+				wg2 := sync.WaitGroup{}
 				for !bc.triegc.Empty() {
 					root, number := bc.triegc.Pop()
 					if uint64(-number) > chosen {
 						bc.triegc.Push(root, number)
 						break
 					}
-					go triedb.Dereference(root.(common.Hash))
+					wg2.Add(1)
+					go func() {
+						triedb.Dereference(root.(common.Hash))
+						wg2.Done()
+					}()
 				}
+				wg2.Wait()
 			}
 		}
 		return nil
@@ -1590,7 +1645,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		return NonStatTy, err
 	}
 	currentBlock := bc.CurrentBlock()
-	reorg, err := bc.forker.ReorgNeeded(currentBlock.Header(), block.Header())
+	reorg, err := bc.forker.ReorgNeededWithFastFinality(currentBlock.Header(), block.Header())
 	if err != nil {
 		return NonStatTy, err
 	}
@@ -1623,6 +1678,11 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 		// event here.
 		if emitHeadEvent {
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+			if posa, ok := bc.Engine().(consensus.PoSA); ok {
+				if finalizedHeader := posa.GetFinalizedHeader(bc, block.Header()); finalizedHeader != nil {
+					bc.finalizedHeaderFeed.Send(FinalizedHeaderEvent{finalizedHeader})
+				}
+			}
 		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
@@ -1710,6 +1770,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 			bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon})
+			if posa, ok := bc.Engine().(consensus.PoSA); ok {
+				if finalizedHeader := posa.GetFinalizedHeader(bc, lastCanon.Header()); finalizedHeader != nil {
+					bc.finalizedHeaderFeed.Send(FinalizedHeaderEvent{finalizedHeader})
+				}
+			}
 		}
 	}()
 	// Start the parallel header verifier
@@ -1739,7 +1804,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 			current = bc.CurrentBlock()
 		)
 		for block != nil && bc.skipBlock(err, it) {
-			reorg, err = bc.forker.ReorgNeeded(current.Header(), block.Header())
+			reorg, err = bc.forker.ReorgNeededWithFastFinality(current.Header(), block.Header())
 			if err != nil {
 				return it.index, err
 			}
@@ -2117,7 +2182,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	//
 	// If the externTd was larger than our local TD, we now need to reimport the previous
 	// blocks to regenerate the required state
-	reorg, err := bc.forker.ReorgNeeded(current.Header(), lastBlock.Header())
+	reorg, err := bc.forker.ReorgNeededWithFastFinality(current.Header(), lastBlock.Header())
 	if err != nil {
 		return it.index, err
 	}
@@ -2569,6 +2634,27 @@ func (bc *BlockChain) trustedDiffLayerLoop() {
 	}
 }
 
+func (bc *BlockChain) startDoubleSignMonitor() {
+	eventChan := make(chan ChainHeadEvent, monitor.MaxCacheHeader)
+	sub := bc.SubscribeChainHeadEvent(eventChan)
+	defer func() {
+		sub.Unsubscribe()
+		close(eventChan)
+		bc.wg.Done()
+	}()
+
+	for {
+		select {
+		case event := <-eventChan:
+			if bc.doubleSignMonitor != nil {
+				bc.doubleSignMonitor.Verify(event.Block.Header())
+			}
+		case <-bc.quit:
+			return
+		}
+	}
+}
+
 func (bc *BlockChain) GetUnTrustedDiffLayer(blockHash common.Hash, pid string) *types.DiffLayer {
 	bc.diffMux.RLock()
 	defer bc.diffMux.RUnlock()
@@ -2973,6 +3059,11 @@ func EnableBlockValidator(chainConfig *params.ChainConfig, engine consensus.Engi
 		}
 		return bc, nil
 	}
+}
+
+func EnableDoubleSignChecker(bc *BlockChain) (*BlockChain, error) {
+	bc.doubleSignMonitor = monitor.NewDoubleSignMonitor()
+	return bc, nil
 }
 
 func (bc *BlockChain) GetVerifyResult(blockNumber uint64, blockHash common.Hash, diffHash common.Hash) *VerifyResult {
