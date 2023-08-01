@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -37,11 +38,13 @@ type (
 	fullNode struct {
 		Children [17]node // Actual trie node data to encode/decode (needs custom encoder)
 		flags    nodeFlag
+		blockNum int64
 	}
 	shortNode struct {
-		Key   []byte
-		Val   node
-		flags nodeFlag
+		Key      []byte
+		Val      node
+		flags    nodeFlag
+		blockNum int64
 	}
 	hashNode  []byte
 	valueNode []byte
@@ -60,6 +63,22 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 
 func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
 func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
+
+func (n *fullNode) updateBlockNum(blockNum int64) {
+	if n.blockNum > blockNum {
+		log.Error("updateBlockNum: blockNum is less than current blockNum", "blockNum", blockNum, "current blockNum", n.blockNum)
+		return
+	}
+	n.blockNum = blockNum
+}
+
+func (n *shortNode) updateBlockNum(blockNum int64) {
+	if n.blockNum > blockNum {
+		log.Error("updateBlockNum: blockNum is less than current blockNum", "blockNum", blockNum, "current blockNum", n.blockNum)
+		return
+	}
+	n.blockNum = blockNum
+}
 
 // nodeFlag contains caching-related metadata about a node.
 type nodeFlag struct {
@@ -150,6 +169,8 @@ func decodeNodeUnsafe(hash, buf []byte) (node, error) {
 	}
 }
 
+// TODO(asyukii): after decoding, whichever function called decodeNode should
+// update the blockNum of the node.
 func decodeShort(hash, elems []byte) (node, error) {
 	kbuf, rest, err := rlp.SplitString(elems)
 	if err != nil {
@@ -163,13 +184,13 @@ func decodeShort(hash, elems []byte) (node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid value node: %v", err)
 		}
-		return &shortNode{key, valueNode(val), flag}, nil
+		return &shortNode{key, valueNode(val), flag, 0}, nil
 	}
 	r, _, err := decodeRef(rest)
 	if err != nil {
 		return nil, wrapError(err, "val")
 	}
-	return &shortNode{key, r, flag}, nil
+	return &shortNode{key, r, flag, 0}, nil
 }
 
 func decodeFull(hash, elems []byte) (*fullNode, error) {
