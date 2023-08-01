@@ -126,6 +126,8 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
+
+	SetBlockNum(blockNumber uint64)
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -178,6 +180,7 @@ type cachingDB struct {
 	accountTrieCache *lru.Cache
 	storageTrieCache *lru.Cache
 	noTries          bool
+	blockNum         uint64
 }
 
 type triePair struct {
@@ -209,7 +212,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 			return tr.(Trie).(*trie.SecureTrie).Copy(), nil
 		}
 	}
-	tr, err := trie.NewSecure(root, db.db)
+	tr, err := trie.NewSecure(root, db.db, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +235,7 @@ func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 		}
 	}
 
-	tr, err := trie.NewSecure(root, db.db)
+	tr, err := trie.NewSecure(root, db.db, 0)
 	if err != nil {
 		return nil, err
 	}

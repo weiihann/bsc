@@ -67,7 +67,7 @@ func TestAccountRange(t *testing.T) {
 
 	var (
 		statedb  = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), nil)
-		state, _ = state.New(common.Hash{}, statedb, nil)
+		state, _ = state.New(common.Hash{}, statedb, nil, 0)
 		addrs    = [AccountRangeMaxResults * 2]common.Address{}
 		m        = map[common.Address]bool{}
 	)
@@ -140,7 +140,7 @@ func TestEmptyAccountRange(t *testing.T) {
 
 	var (
 		statedb = state.NewDatabase(rawdb.NewMemoryDatabase())
-		st, _   = state.New(common.Hash{}, statedb, nil)
+		st, _   = state.New(common.Hash{}, statedb, nil, 0)
 	)
 	st.Commit(nil)
 	st.IntermediateRoot(true)
@@ -163,7 +163,7 @@ func TestStorageRangeAt(t *testing.T) {
 
 	// Create a state where account 0x010000... has a few storage entries.
 	var (
-		state, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		state, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, 0)
 		addr     = common.Address{0x01}
 		keys     = []common.Hash{ // hashes of Keys of storage
 			common.HexToHash("340dd630ad21bf010b4e676dbfa9ba9a02175262d1fa356232cfde6cb5b47ef2"),

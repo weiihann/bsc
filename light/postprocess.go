@@ -187,12 +187,12 @@ func (c *ChtIndexerBackend) Reset(ctx context.Context, section uint64, lastSecti
 		root = GetChtRoot(c.diskdb, section-1, lastSectionHead)
 	}
 	var err error
-	c.trie, err = trie.New(root, c.triedb)
+	c.trie, err = trie.New(root, c.triedb, 0)
 
 	if err != nil && c.odr != nil {
 		err = c.fetchMissingNodes(ctx, section, root)
 		if err == nil {
-			c.trie, err = trie.New(root, c.triedb)
+			c.trie, err = trie.New(root, c.triedb, 0)
 		}
 	}
 	c.section = section
@@ -404,11 +404,11 @@ func (b *BloomTrieIndexerBackend) Reset(ctx context.Context, section uint64, las
 		root = GetBloomTrieRoot(b.diskdb, section-1, lastSectionHead)
 	}
 	var err error
-	b.trie, err = trie.New(root, b.triedb)
+	b.trie, err = trie.New(root, b.triedb, 0)
 	if err != nil && b.odr != nil {
 		err = b.fetchMissingNodes(ctx, section, root)
 		if err == nil {
-			b.trie, err = trie.New(root, b.triedb)
+			b.trie, err = trie.New(root, b.triedb, 0)
 		}
 	}
 	b.section = section

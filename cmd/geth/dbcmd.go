@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -62,6 +63,8 @@ Remove blockchain and state databases`,
 		Category:  "DATABASE COMMANDS",
 		Subcommands: []cli.Command{
 			dbInspectCmd,
+			dbInspectTrieCmd,
+			dbInspectNodesCmd,
 			dbStatCmd,
 			dbCompactCmd,
 			dbGetCmd,
@@ -87,6 +90,28 @@ Remove blockchain and state databases`,
 		},
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
+	}
+	dbInspectTrieCmd = cli.Command{
+		Action:    utils.MigrateFlags(inspectTrie),
+		Name:      "inspect-trie",
+		ArgsUsage: "<blocknum> <jobnum>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+		},
+		Usage:       "Inspect the MPT tree of the account and contract.",
+		Description: `This commands iterates the entrie WorldState.`,
+	}
+	dbInspectNodesCmd = cli.Command{
+		Action:    utils.MigrateFlags(inspectNodes),
+		Name:      "inspect-nodes",
+		ArgsUsage: "<startBlock> <endBlock> <range>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+		},
+		Usage:       "Inspect the storage size used by each node type in the database within a range of blocks",
+		Description: `This commands iterates the entire WorldState. The default range is from the genesis block to the latest block.`,
 	}
 	dbStatCmd = cli.Command{
 		Action: utils.MigrateFlags(dbStats),
@@ -280,6 +305,152 @@ func confirmAndRemoveDB(database string, kind string) {
 		})
 		log.Info("Database successfully deleted", "path", database, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
+}
+
+func inspectTrie(ctx *cli.Context) error {
+	if ctx.NArg() < 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+
+	if ctx.NArg() > 3 {
+		return fmt.Errorf("Max 3 arguments: %v", ctx.Command.ArgsUsage)
+	}
+
+	var (
+		blockNumber  uint64
+		trieRootHash common.Hash
+		jobnum       uint64
+	)
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true, false)
+	defer db.Close()
+
+	var headerBlockHash common.Hash
+	if ctx.NArg() >= 1 {
+		if ctx.Args().Get(0) == "latest" {
+			headerHash := rawdb.ReadHeadHeaderHash(db)
+			blockNumber = *(rawdb.ReadHeaderNumber(db, headerHash))
+		} else if ctx.Args().Get(0) == "snapshot" {
+			trieRootHash = rawdb.ReadSnapshotRoot(db)
+			blockNumber = math.MaxUint64
+		} else {
+			var err error
+			blockNumber, err = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to Parse blocknum, Args[0]: %v, err: %v", ctx.Args().Get(0), err)
+			}
+		}
+
+		if ctx.NArg() == 1 {
+			jobnum = 1000
+		} else {
+			var err error
+			jobnum, err = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to Parse jobnum, Args[1]: %v, err: %v", ctx.Args().Get(1), err)
+			}
+		}
+
+		if blockNumber != math.MaxUint64 {
+			headerBlockHash = rawdb.ReadCanonicalHash(db, blockNumber)
+			if headerBlockHash == (common.Hash{}) {
+				return fmt.Errorf("ReadHeadBlockHash empry hash")
+			}
+			blockHeader := rawdb.ReadHeader(db, headerBlockHash, blockNumber)
+			trieRootHash = blockHeader.Root
+		}
+		if (trieRootHash == common.Hash{}) {
+			log.Error("Empty root hash")
+		}
+		fmt.Printf("ReadBlockHeader, root: %v, blocknum: %v\n", trieRootHash, blockNumber)
+		theTrie, err := trie.New(trieRootHash, trie.NewDatabase(db), 0)
+		if err != nil {
+			fmt.Printf("fail to new trie tree, err: %v, rootHash: %v\n", err, trieRootHash.String())
+			return err
+		}
+		theInspect, err := trie.NewInspector(theTrie, blockNumber, jobnum)
+		theInspect.Run()
+		theInspect.DisplayResult()
+	}
+	return nil
+}
+
+func inspectNodes(ctx *cli.Context) error {
+	if ctx.NArg() > 3 {
+		return fmt.Errorf("Max 3 arguments: %v", ctx.Command.ArgsUsage)
+	}
+
+	var trieRootHash common.Hash
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true, false)
+	defer db.Close()
+
+	var headerBlockHash common.Hash
+	var fromBlock, toBlock uint64
+	var bucketRange uint64
+
+	headerHash := rawdb.ReadHeadHeaderHash(db)
+	latestBlock := *(rawdb.ReadHeaderNumber(db, headerHash))
+	defaultBucketRange := uint64(5256000) // 6 months
+
+	if ctx.NArg() == 3 {
+		fromBlock, _ = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+		toBlock, _ = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+		bucketRange, _ = strconv.ParseUint(ctx.Args().Get(2), 10, 64)
+	} else if ctx.NArg() == 2 {
+		fromBlock, _ = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+		toBlock = latestBlock
+		bucketRange, _ = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+	} else if ctx.NArg() == 1 {
+		fromBlock = 1
+		toBlock = latestBlock
+		bucketRange, _ = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+	} else {
+		fromBlock = 1
+		toBlock = latestBlock
+		bucketRange = defaultBucketRange
+	}
+
+	if bucketRange > (toBlock - fromBlock + 1) {
+		return fmt.Errorf("bucketRange is larger than block range")
+	}
+
+	if toBlock == math.MaxUint64 {
+		return fmt.Errorf("toBlock is math.MaxUint64")
+	}
+
+	headerBlockHash = rawdb.ReadCanonicalHash(db, latestBlock)
+	if headerBlockHash == (common.Hash{}) {
+		return fmt.Errorf("ReadHeadBlockHash empty hash")
+	}
+	blockHeader := rawdb.ReadHeader(db, headerBlockHash, latestBlock)
+	trieRootHash = blockHeader.Root
+	if (trieRootHash == common.Hash{}) {
+		return fmt.Errorf("empty root hash")
+	}
+
+	tr, err := trie.New(trieRootHash, trie.NewDatabase(db), 0)
+	if err != nil {
+		fmt.Printf("fail to new trie tree, err: %v, rootHash: %v\n", err, trieRootHash.String())
+		return err
+	}
+
+	inspector, err := trie.NewMetaInspector(tr, fromBlock, toBlock, bucketRange)
+	if err != nil {
+		fmt.Printf("fail to create meta inspector\n")
+		return err
+	}
+	inspector.Run()
+
+	inspector.Display()
+
+	return nil
 }
 
 func inspect(ctx *cli.Context) error {
@@ -486,7 +657,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 			return err
 		}
 	}
-	theTrie, err := trie.New(stRoot, trie.NewDatabase(db))
+	theTrie, err := trie.New(stRoot, trie.NewDatabase(db), 0)
 	if err != nil {
 		return err
 	}

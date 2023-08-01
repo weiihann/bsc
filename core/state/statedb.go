@@ -146,16 +146,18 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+
+	blockNum uint64
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
-	return newStateDB(root, db, snaps)
+func New(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
+	return newStateDB(root, db, snaps, blockNum)
 }
 
 // NewWithSharedPool creates a new state with sharedStorge on layer 1.5
-func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
-	statedb, err := newStateDB(root, db, snaps)
+func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
+	statedb, err := newStateDB(root, db, snaps, blockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +165,7 @@ func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree) (*St
 	return statedb, nil
 }
 
-func newStateDB(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+func newStateDB(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                  db,
 		originalRoot:        root,
@@ -175,6 +177,7 @@ func newStateDB(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, 
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
 		hasher:              crypto.NewKeccakState(),
+		blockNum:            blockNum,
 	}
 
 	if sdb.snaps != nil {
@@ -607,6 +610,17 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 	}
 }
 
+func (s *StateDB) SetBlockNum(blockNum uint64) {
+	if s.blockNum > blockNum {
+		return
+	}
+	s.blockNum = blockNum
+}
+
+func (s *StateDB) GetBlockNum() uint64 {
+	return s.blockNum
+}
+
 // Suicide marks the given account as suicided.
 // This clears the account balance.
 //
@@ -681,6 +695,9 @@ func (s *StateDB) getStateObject(addr common.Address) *StateObject {
 func (s *StateDB) getDeletedStateObject(addr common.Address) *StateObject {
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
+		if obj.trie != nil {
+			obj.trie.SetBlockNum(s.blockNum)
+		}
 		return obj
 	}
 	// If no live objects are available, attempt to use snapshots
@@ -721,6 +738,8 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *StateObject {
 			s.trie = tr
 		}
 		start := time.Now()
+		// TODO(asyukii): set the block number of trie
+		s.trie.SetBlockNum(s.blockNum)
 		enc, err := s.trie.TryGet(addr.Bytes())
 		if metrics.EnabledExpensive {
 			s.AccountReads += time.Since(start)

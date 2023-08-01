@@ -30,6 +30,15 @@ type MissingNodeError struct {
 	Path     []byte      // hex-encoded path to the missing node
 }
 
+type MissingNodeMetaError struct {
+	NodeHash common.Hash // hash of the missing node
+	Path     []byte      // hex-encoded path to the missing node
+}
+
+func (err *MissingNodeMetaError) Error() string {
+	return fmt.Sprintf("missing trie node %x (path %x)", err.NodeHash, err.Path)
+}
+
 func (err *MissingNodeError) Error() string {
 	return fmt.Sprintf("missing trie node %x (path %x)", err.NodeHash, err.Path)
 }

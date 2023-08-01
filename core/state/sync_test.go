@@ -42,7 +42,7 @@ type testAccount struct {
 func makeTestState() (Database, common.Hash, []*testAccount) {
 	// Create an empty state
 	db := NewDatabase(rawdb.NewMemoryDatabase())
-	state, _ := New(common.Hash{}, db, nil)
+	state, _ := New(common.Hash{}, db, nil, 0)
 
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
@@ -81,7 +81,7 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
 	// Check root availability and state contents
-	state, err := New(root, NewDatabase(db), nil)
+	state, err := New(root, NewDatabase(db), nil, 0)
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
@@ -106,7 +106,7 @@ func checkTrieConsistency(db ethdb.Database, root common.Hash) error {
 	if v, _ := db.Get(root[:]); v == nil {
 		return nil // Consider a non existent state consistent.
 	}
-	trie, err := trie.New(root, trie.NewDatabase(db))
+	trie, err := trie.New(root, trie.NewDatabase(db), 0)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 	if _, err := db.Get(root.Bytes()); err != nil {
 		return nil // Consider a non existent state consistent.
 	}
-	state, err := New(root, NewDatabase(db), nil)
+	state, err := New(root, NewDatabase(db), nil, 0)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 	if commit {
 		srcDb.TrieDB().Commit(srcRoot, false, nil)
 	}
-	srcTrie, _ := trie.New(srcRoot, srcDb.TrieDB())
+	srcTrie, _ := trie.New(srcRoot, srcDb.TrieDB(), 0)
 
 	// Create a destination state and sync with the scheduler
 	dstDb := rawdb.NewMemoryDatabase()
@@ -209,7 +209,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool) {
 				if err := rlp.DecodeBytes(srcTrie.Get(path[0]), &acc); err != nil {
 					t.Fatalf("failed to decode account on path %x: %v", path, err)
 				}
-				stTrie, err := trie.New(acc.Root, srcDb.TrieDB())
+				stTrie, err := trie.New(acc.Root, srcDb.TrieDB(), 0)
 				if err != nil {
 					t.Fatalf("failed to retriev storage trie for path %x: %v", path, err)
 				}
@@ -483,7 +483,7 @@ func TestIncompleteStateSync(t *testing.T) {
 		if code {
 			rawdb.WriteCode(dstDb, node, val)
 		} else {
-			rawdb.WriteTrieNode(dstDb, node, val)
+			rawdb.WriteTrieNode(dstDb, node, val, 0)
 		}
 	}
 }
