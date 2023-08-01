@@ -63,6 +63,10 @@ func NewSecure(root common.Hash, db *Database) (*SecureTrie, error) {
 	return &SecureTrie{trie: *trie}, nil
 }
 
+func (t *SecureTrie) SetBlockNum(blockNum uint64) {
+	t.trie.SetBlockNum(blockNum)
+}
+
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *SecureTrie) Get(key []byte) []byte {

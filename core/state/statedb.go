@@ -146,6 +146,8 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+
+	blockNum uint64
 }
 
 // New creates a new state from a given trie.
@@ -607,6 +609,14 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 	}
 }
 
+func (s *StateDB) SetBlockNum(blockNum uint64) {
+	if s.blockNum > blockNum {
+		log.Warn("StateDB, SetBlockNum: block number decreased", "old", s.blockNum, "new", blockNum)
+		return
+	}
+	s.blockNum = blockNum
+}
+
 // Suicide marks the given account as suicided.
 // This clears the account balance.
 //
@@ -681,6 +691,7 @@ func (s *StateDB) getStateObject(addr common.Address) *StateObject {
 func (s *StateDB) getDeletedStateObject(addr common.Address) *StateObject {
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
+		obj.trie.SetBlockNum(s.blockNum)
 		return obj
 	}
 	// If no live objects are available, attempt to use snapshots
@@ -721,6 +732,8 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *StateObject {
 			s.trie = tr
 		}
 		start := time.Now()
+		// TODO(asyukii): set the block number of trie
+		s.trie.SetBlockNum(s.blockNum)
 		enc, err := s.trie.TryGet(addr.Bytes())
 		if metrics.EnabledExpensive {
 			s.AccountReads += time.Since(start)

@@ -112,6 +112,8 @@ type odrTrie struct {
 	trie *trie.Trie
 }
 
+func (t *odrTrie) SetBlockNum(_ uint64) {}
+
 func (t *odrTrie) TryGet(key []byte) ([]byte, error) {
 	key = crypto.Keccak256(key)
 	var res []byte
