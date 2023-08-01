@@ -37,6 +37,8 @@ func NewEmptyTrie() *EmptyTrie {
 	return &EmptyTrie{}
 }
 
+func (t *EmptyTrie) SetBlockNum(blockNum uint64) { return }
+
 func (t *EmptyTrie) Get(key []byte) []byte {
 	return nil
 }

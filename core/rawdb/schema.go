@@ -107,6 +107,7 @@ var (
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
+	MetaPrefix            = []byte("m") // MetaPrefix + trie node hash -> node's block num
 
 	// difflayer database
 	diffLayerPrefix = []byte("d") // diffLayerPrefix + hash  -> diffLayer
@@ -243,11 +244,23 @@ func codeKey(hash common.Hash) []byte {
 	return append(CodePrefix, hash.Bytes()...)
 }
 
+// MetaKey = MetaPrefix + hash
+func MetaKey(hash common.Hash) []byte {
+	return append(MetaPrefix, hash.Bytes()...)
+}
+
 // IsCodeKey reports whether the given byte slice is the key of contract code,
 // if so return the raw code hash as well.
 func IsCodeKey(key []byte) (bool, []byte) {
 	if bytes.HasPrefix(key, CodePrefix) && len(key) == common.HashLength+len(CodePrefix) {
 		return true, key[len(CodePrefix):]
+	}
+	return false, nil
+}
+
+func IsMetaKey(key []byte) (bool, []byte) {
+	if bytes.HasPrefix(key, MetaPrefix) && len(key) == common.HashLength+len(MetaPrefix) {
+		return true, key[len(MetaPrefix):]
 	}
 	return false, nil
 }

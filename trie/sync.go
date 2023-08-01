@@ -300,7 +300,7 @@ func (s *Sync) Process(result SyncResult) error {
 func (s *Sync) Commit(dbw ethdb.Batch) error {
 	// Dump the membatch into a database dbw
 	for key, value := range s.membatch.nodes {
-		rawdb.WriteTrieNode(dbw, key, value)
+		rawdb.WriteTrieNode(dbw, key, value, 0)
 	}
 	for key, value := range s.membatch.codes {
 		rawdb.WriteCode(dbw, key, value)

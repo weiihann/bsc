@@ -272,7 +272,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB {
 	sdb := state.NewDatabase(db)
-	statedb, _ := state.New(common.Hash{}, sdb, nil)
+	statedb, _ := state.New(common.Hash{}, sdb, nil, 0)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -285,7 +285,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 	statedb.Finalise(false)
 	statedb.AccountsIntermediateRoot()
 	root, _, _ := statedb.Commit(nil)
-	statedb, _ = state.New(root, sdb, nil)
+	statedb, _ = state.New(root, sdb, nil, 0)
 	return statedb
 }
 

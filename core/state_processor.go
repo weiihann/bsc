@@ -122,7 +122,7 @@ func (p *LightStateProcessor) Process(block *types.Block, statedb *state.StateDB
 			// prepare new statedb
 			statedb.StopPrefetcher()
 			parent := p.bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
-			statedb, err = state.New(parent.Root, p.bc.stateCache, p.bc.snaps)
+			statedb, err = state.New(parent.Root, p.bc.stateCache, p.bc.snaps, parent.Number.Uint64())
 			if err != nil {
 				return statedb, nil, nil, 0, err
 			}
@@ -395,6 +395,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Handle upgrade build-in system contract code
 	systemcontracts.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)
 
+	// TODO(asyukii): update block num in statedb
+	statedb.SetBlockNum(block.Number().Uint64())
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 

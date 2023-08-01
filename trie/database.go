@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -145,6 +146,8 @@ type cachedNode struct {
 
 	flushPrev common.Hash // Previous node in the flush-list
 	flushNext common.Hash // Next node in the flush-list
+
+	blockNum uint64 // Block number when this node was first cached
 }
 
 // cachedNodeSize is the raw size of a cachedNode data structure without any
@@ -155,6 +158,13 @@ var cachedNodeSize = int(reflect.TypeOf(cachedNode{}).Size())
 // cachedNodeChildrenSize is the raw size of an initialized but empty external
 // reference map.
 const cachedNodeChildrenSize = 48
+
+func (n *cachedNode) SetBlockNum(blockNum uint64) {
+	if n.blockNum > blockNum {
+		return
+	}
+	n.blockNum = blockNum
+}
 
 // rlp returns the raw rlp encoded blob of the cached trie node, either directly
 // from the cache, or by regenerating it from the collapsed node.
@@ -323,7 +333,13 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 	defer db.lock.Unlock()
 
 	// If the node's already cached, skip
-	if _, ok := db.dirties[hash]; ok {
+	if existingNode, ok := db.dirties[hash]; ok {
+		switch n := node.(type) {
+		case *shortNode:
+			existingNode.SetBlockNum(n.blockNum)
+		case *fullNode:
+			existingNode.SetBlockNum(n.blockNum)
+		}
 		return
 	}
 	memcacheDirtyWriteMeter.Mark(int64(size))
@@ -334,6 +350,14 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 		size:      uint16(size),
 		flushPrev: db.newest,
 	}
+
+	switch n := node.(type) {
+	case *shortNode:
+		entry.SetBlockNum(n.blockNum)
+	case *fullNode:
+		entry.SetBlockNum(n.blockNum)
+	}
+
 	entry.forChilds(func(child common.Hash) {
 		if c := db.dirties[child]; c != nil {
 			c.parents++
@@ -379,6 +403,7 @@ func (db *Database) node(hash common.Hash) node {
 
 			// The returned value from cache is in its own copy,
 			// safe to use mustDecodeNodeUnsafe for decoding.
+
 			return mustDecodeNodeUnsafe(hash[:], enc)
 		}
 	}
@@ -396,6 +421,9 @@ func (db *Database) node(hash common.Hash) node {
 
 	// Content unavailable in memory, attempt to retrieve from disk
 	enc, err := db.diskdb.Get(hash[:])
+	if err != nil {
+		fmt.Printf("diskdb get node error: %v\n", err)
+	}
 	if err != nil || enc == nil {
 		return nil
 	}
@@ -407,6 +435,17 @@ func (db *Database) node(hash common.Hash) node {
 	// The returned value from database is in its own copy,
 	// safe to use mustDecodeNodeUnsafe for decoding.
 	return mustDecodeNodeUnsafe(hash[:], enc)
+}
+
+func (db *Database) nodeMeta(hash common.Hash) uint64 {
+
+	val, err := db.diskdb.Get(rawdb.MetaKey(hash))
+	if err != nil || val == nil {
+		return 0
+	}
+
+	return binary.BigEndian.Uint64(val)
+
 }
 
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
@@ -641,7 +680,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		for size > limit && oldest != (common.Hash{}) {
 			// Fetch the oldest referenced node and push into the batch
 			node := db.dirties[oldest]
-			rawdb.WriteTrieNode(batch, oldest, node.rlp())
+			rawdb.WriteTrieNode(batch, oldest, node.rlp(), node.blockNum)
 
 			// If we exceeded the ideal batch size, commit and reset
 			if batch.ValueSize() >= ethdb.IdealBatchSize {
@@ -798,7 +837,8 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		return err
 	}
 	// If we've reached an optimal batch size, commit and start over
-	rawdb.WriteTrieNode(batch, hash, node.rlp())
+	// log.Info("Database.commit", "blockNum", node.blockNum)
+	rawdb.WriteTrieNode(batch, hash, node.rlp(), node.blockNum)
 	if callback != nil {
 		callback(hash)
 	}

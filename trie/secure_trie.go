@@ -39,6 +39,7 @@ type SecureTrie struct {
 	trie             Trie
 	secKeyCache      map[string][]byte
 	secKeyCacheOwner *SecureTrie // Pointer to self, replace the key cache on mismatch
+	blockNum         uint64
 }
 
 // NewSecure creates a trie with an existing root node from a backing database
@@ -52,15 +53,23 @@ type SecureTrie struct {
 // Loaded nodes are kept around until their 'cache generation' expires.
 // A new cache generation is created by each call to Commit.
 // cachelimit sets the number of past cache generations to keep.
-func NewSecure(root common.Hash, db *Database) (*SecureTrie, error) {
+func NewSecure(root common.Hash, db *Database, blockNum uint64) (*SecureTrie, error) {
 	if db == nil {
 		panic("trie.NewSecure called without a database")
 	}
-	trie, err := New(root, db)
+	trie, err := New(root, db, blockNum)
 	if err != nil {
 		return nil, err
 	}
-	return &SecureTrie{trie: *trie}, nil
+	return &SecureTrie{trie: *trie, blockNum: blockNum}, nil
+}
+
+func (t *SecureTrie) SetBlockNum(blockNum uint64) {
+	if t.blockNum > blockNum {
+		return
+	}
+	t.blockNum = blockNum
+	t.trie.SetBlockNum(blockNum)
 }
 
 // Get returns the value for key stored in the trie.

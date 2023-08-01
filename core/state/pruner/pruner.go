@@ -222,7 +222,7 @@ func pruneAll(maindb ethdb.Database, g *core.Genesis) error {
 		}
 		log.Info("Database compaction finished", "elapsed", common.PrettyDuration(time.Since(cstart)))
 	}
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(maindb), nil)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(maindb), nil, 0)
 	for addr, account := range g.Alloc {
 		statedb.AddBalance(addr, account.Balance)
 		statedb.SetCode(addr, account.Code)
@@ -736,7 +736,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}
-	t, err := trie.NewSecure(genesis.Root(), trie.NewDatabase(db))
+	t, err := trie.NewSecure(genesis.Root(), trie.NewDatabase(db), 0)
 	if err != nil {
 		return err
 	}
@@ -756,7 +756,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 				return err
 			}
 			if acc.Root != emptyRoot {
-				storageTrie, err := trie.NewSecure(acc.Root, trie.NewDatabase(db))
+				storageTrie, err := trie.NewSecure(acc.Root, trie.NewDatabase(db), 0)
 				if err != nil {
 					return err
 				}

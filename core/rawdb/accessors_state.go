@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"encoding/binary"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -54,6 +55,11 @@ func ReadTrieNode(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	return data
 }
 
+func ReadTrieNodeMeta(db ethdb.KeyValueReader, hash common.Hash) []byte {
+	data, _ := db.Get(MetaKey(hash))
+	return data
+}
+
 // HasCode checks if the contract code corresponding to the
 // provided code hash is present in the db.
 func HasCode(db ethdb.KeyValueReader, hash common.Hash) bool {
@@ -80,6 +86,11 @@ func HasTrieNode(db ethdb.KeyValueReader, hash common.Hash) bool {
 	return ok
 }
 
+func HasTrieNodeMeta(db ethdb.KeyValueReader, hash common.Hash) bool {
+	ok, _ := db.Has(MetaKey(hash))
+	return ok
+}
+
 // WritePreimages writes the provided set of preimages to the database.
 func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 	for hash, preimage := range preimages {
@@ -99,9 +110,27 @@ func WriteCode(db ethdb.KeyValueWriter, hash common.Hash, code []byte) {
 }
 
 // WriteTrieNode writes the provided trie node database.
-func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
+func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte, blockNum uint64) {
 	if err := db.Put(hash.Bytes(), node); err != nil {
 		log.Crit("Failed to store trie node", "err", err)
+	}
+
+	// Write the meta data for the trie node.
+	if blockNum != 0 {
+		WriteTrieNodeMeta(db, hash, blockNum)
+	}
+}
+
+func uint64ToBytes(value uint64) []byte {
+	bytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(bytes, value)
+	return bytes
+}
+
+func WriteTrieNodeMeta(db ethdb.KeyValueWriter, hash common.Hash, blockNum uint64) {
+	// Convert blockNum to bytes
+	if err := db.Put(MetaKey(hash), uint64ToBytes(blockNum)); err != nil {
+		log.Crit("Failed to store trie node block number", "err", err)
 	}
 }
 
