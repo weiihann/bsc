@@ -38,13 +38,13 @@ type (
 	fullNode struct {
 		Children [17]node // Actual trie node data to encode/decode (needs custom encoder)
 		flags    nodeFlag
-		blockNum int64
+		blockNum uint64
 	}
 	shortNode struct {
 		Key      []byte
 		Val      node
 		flags    nodeFlag
-		blockNum int64
+		blockNum uint64
 	}
 	hashNode  []byte
 	valueNode []byte
@@ -64,7 +64,7 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
 func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
 
-func (n *fullNode) updateBlockNum(blockNum int64) {
+func (n *fullNode) updateBlockNum(blockNum uint64) {
 	if n.blockNum > blockNum {
 		log.Error("updateBlockNum: blockNum is less than current blockNum", "blockNum", blockNum, "current blockNum", n.blockNum)
 		return
@@ -72,7 +72,7 @@ func (n *fullNode) updateBlockNum(blockNum int64) {
 	n.blockNum = blockNum
 }
 
-func (n *shortNode) updateBlockNum(blockNum int64) {
+func (n *shortNode) updateBlockNum(blockNum uint64) {
 	if n.blockNum > blockNum {
 		log.Error("updateBlockNum: blockNum is less than current blockNum", "blockNum", blockNum, "current blockNum", n.blockNum)
 		return

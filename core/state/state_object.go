@@ -180,6 +180,7 @@ func (s *StateObject) getTrie(db Database) Trie {
 			}
 		}
 	}
+	s.trie.SetBlockNum(s.db.blockNum)
 	return s.trie
 }
 
@@ -264,7 +265,9 @@ func (s *StateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		//		if metrics.EnabledExpensive {
 		//			meter = &s.db.StorageReads
 		//		}
-		enc, err = s.getTrie(db).TryGet(key.Bytes())
+		trie := s.getTrie(db)
+		trie.SetBlockNum(s.db.blockNum)
+		enc, err = trie.TryGet(key.Bytes())
 		if metrics.EnabledExpensive {
 			s.db.StorageReads += time.Since(start)
 		}

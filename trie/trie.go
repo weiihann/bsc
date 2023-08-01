@@ -67,7 +67,7 @@ type Trie struct {
 	// actually unhashed nodes
 	unhashed int
 
-	blockNum int64 // Block number of the trie
+	blockNum uint64 // Block number of the trie
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -102,6 +102,14 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 // the key after the given start key.
 func (t *Trie) NodeIterator(start []byte) NodeIterator {
 	return newNodeIterator(t, start)
+}
+
+func (t *Trie) SetBlockNum(blockNum uint64) {
+	if t.blockNum > blockNum {
+		log.Warn("Trie, SetBlockNum: blockNum is less than current blockNum", "blockNum", blockNum, "current blockNum", t.blockNum)
+		return
+	}
+	t.blockNum = blockNum
 }
 
 // Get returns the value for key stored in the trie.
