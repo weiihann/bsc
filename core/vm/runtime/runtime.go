@@ -112,6 +112,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 
 	if cfg.State == nil {
 		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State.SetBlockNum(cfg.BlockNumber.Uint64())
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"))
@@ -145,6 +146,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 
 	if cfg.State == nil {
 		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State.SetBlockNum(cfg.BlockNumber.Uint64())
 	}
 	var (
 		vmenv  = NewEnv(cfg)

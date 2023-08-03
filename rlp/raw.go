@@ -17,6 +17,7 @@
 package rlp
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"reflect"
 )
@@ -99,6 +100,7 @@ func SplitList(b []byte) (content, rest []byte, err error) {
 		return nil, b, err
 	}
 	if k != List {
+		log.Error("rlp/raw.go:SplitList()")
 		return nil, b, ErrExpectedList
 	}
 	return content, rest, nil

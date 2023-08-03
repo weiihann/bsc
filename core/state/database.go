@@ -137,6 +137,10 @@ func NewDatabase(db ethdb.Database) Database {
 	return NewDatabaseWithConfig(db, nil)
 }
 
+func NewDatabaseWithMeta(db, metaDb ethdb.Database) Database {
+	return NewDatabaseWithConfigCacheMeta(db, metaDb, nil)
+}
+
 // NewDatabaseWithConfig creates a backing store for state. The returned database
 // is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
 // large memory cache.
@@ -161,6 +165,27 @@ func NewDatabaseWithConfigAndCache(db ethdb.Database, config *trie.Config) Datab
 
 	database := &cachingDB{
 		db:               trie.NewDatabaseWithConfig(db, config),
+		codeSizeCache:    csc,
+		codeCache:        cc,
+		accountTrieCache: atc,
+		storageTrieCache: stc,
+		noTries:          noTries,
+	}
+	if !noTries {
+		go database.purgeLoop()
+	}
+	return database
+}
+
+func NewDatabaseWithConfigCacheMeta(db, metaDb ethdb.Database, config *trie.Config) Database {
+	csc, _ := lru.New(codeSizeCacheSize)
+	cc, _ := lru.New(codeCacheSize)
+	atc, _ := lru.New(accountTrieCacheSize)
+	stc, _ := lru.New(storageTrieCacheSize)
+	noTries := config != nil && config.NoTries
+
+	database := &cachingDB{
+		db:               trie.NewDatabaseWithConfigMeta(db, metaDb, config),
 		codeSizeCache:    csc,
 		codeCache:        cc,
 		accountTrieCache: atc,

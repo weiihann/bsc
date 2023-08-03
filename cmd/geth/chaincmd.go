@@ -47,7 +47,7 @@ import (
 
 var (
 	initCommand = cli.Command{
-		Action:    utils.MigrateFlags(initGenesis),
+		Action:    utils.MigrateFlags(initGenesisMeta),
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
@@ -237,6 +237,64 @@ func initGenesis(ctx *cli.Context) error {
 	return nil
 }
 
+func initGenesisMeta(ctx *cli.Context) error {
+	// Make sure we have a valid genesis JSON
+	genesisPath := ctx.Args().First()
+	if len(genesisPath) == 0 {
+		utils.Fatalf("Must supply path to genesis JSON file")
+	}
+	file, err := os.Open(genesisPath)
+	if err != nil {
+		utils.Fatalf("Failed to read genesis file: %v", err)
+	}
+	defer file.Close()
+
+	genesis := new(core.Genesis)
+	if err := json.NewDecoder(file).Decode(genesis); err != nil {
+		utils.Fatalf("invalid genesis file: %v", err)
+	}
+	// Open and initialise both full and light databases
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	for _, name := range []string{"chaindata", "lightchaindata"} {
+
+		if name == "chaindata" {
+			chaindb, err := stack.OpenDatabase(name, 0, 0, "", false)
+			if err != nil {
+				utils.Fatalf("Failed to open database: %v", err)
+			}
+
+			metaDb, err := stack.OpenDatabase("metadata", 0, 0, "", false)
+			if err != nil {
+				utils.Fatalf("Failed to open database: %v", err)
+			}
+
+			_, hash, err := core.SetupGenesisBlockMeta(chaindb, metaDb, genesis)
+			if err != nil {
+				utils.Fatalf("Failed to write genesis block: %v", err)
+			}
+			chaindb.Close()
+			metaDb.Close()
+			log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
+
+		} else {
+			chaindb, err := stack.OpenDatabase(name, 0, 0, "", false)
+			if err != nil {
+				utils.Fatalf("Failed to open database: %v", err)
+			}
+			_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
+			if err != nil {
+				utils.Fatalf("Failed to write genesis block: %v", err)
+			}
+			chaindb.Close()
+			log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
+		}
+
+	}
+	return nil
+}
+
 // initNetwork will bootstrap and initialize a new genesis block, and nodekey, config files for network nodes
 func initNetwork(ctx *cli.Context) error {
 	initDir := ctx.String(utils.InitNetworkDir.Name)
@@ -353,8 +411,9 @@ func importChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, db := utils.MakeChain(ctx, stack)
+	chain, db, metaDb := utils.MakeChainMeta(ctx, stack)
 	defer db.Close()
+	defer metaDb.Close()
 
 	// Start periodically gathering memory profiles
 	var peakMemAlloc, peakMemSys uint64
@@ -428,7 +487,7 @@ func exportChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, _ := utils.MakeChain(ctx, stack)
+	chain, _, _ := utils.MakeChainMeta(ctx, stack)
 	start := time.Now()
 
 	var err error

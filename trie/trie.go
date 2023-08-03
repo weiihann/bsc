@@ -106,7 +106,6 @@ func (t *Trie) NodeIterator(start []byte) NodeIterator {
 
 func (t *Trie) SetBlockNum(blockNum uint64) {
 	if t.blockNum > blockNum {
-		log.Warn("Trie, SetBlockNum: blockNum is less than current blockNum", "blockNum", blockNum, "current blockNum", t.blockNum)
 		return
 	}
 	t.blockNum = blockNum
@@ -544,7 +543,6 @@ func (t *Trie) Hash() common.Hash {
 // Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
 func (t *Trie) Commit(onleaf LeafCallback) (common.Hash, int, error) {
-	// TODO(asyukii): need to commit to the new database
 	// beware of read-only, it will not perform the commit, but in our case we still need to
 	if t.db == nil {
 		panic("commit called on trie with nil database")
