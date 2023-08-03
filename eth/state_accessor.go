@@ -68,6 +68,7 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 			database = state.NewDatabaseWithConfig(eth.chainDb, &trie.Config{Cache: 16})
 			if statedb, err = state.New(block.Root(), database, nil); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
+				statedb.SetBlockNum(block.NumberU64())
 				return statedb, nil
 			}
 		}
@@ -90,6 +91,7 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 		// tracing from the genesis).
 		if !checkLive {
 			statedb, err = state.New(current.Root(), database, nil)
+			statedb.SetBlockNum(current.NumberU64())
 			if err == nil {
 				return statedb, nil
 			}
@@ -106,6 +108,7 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 			current = parent
 
 			statedb, err = state.New(current.Root(), database, nil)
+			statedb.SetBlockNum(current.NumberU64())
 			if err == nil {
 				break
 			}
@@ -149,6 +152,7 @@ func (eth *Ethereum) StateAtBlock(block *types.Block, reexec uint64, base *state
 				current.NumberU64(), current.Root().Hex(), err)
 		}
 		statedb, err = state.New(root, database, nil)
+		statedb.SetBlockNum(current.NumberU64())
 		if err != nil {
 			return nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}

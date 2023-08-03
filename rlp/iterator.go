@@ -16,6 +16,10 @@
 
 package rlp
 
+import (
+	"github.com/ethereum/go-ethereum/log"
+)
+
 type listIterator struct {
 	data []byte
 	next []byte
@@ -30,6 +34,7 @@ func NewListIterator(data RawValue) (*listIterator, error) {
 		return nil, err
 	}
 	if k != List {
+		log.Error("rlp/iterator.go/NewListIterator")
 		return nil, ErrExpectedList
 	}
 	it := &listIterator{

@@ -68,6 +68,7 @@ var (
 // servers even while the trie is executing expensive garbage collection.
 type Database struct {
 	diskdb ethdb.KeyValueStore // Persistent storage for matured trie nodes
+	metaDb ethdb.KeyValueStore // Persistent storage for trie metadata
 
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
@@ -145,6 +146,8 @@ type cachedNode struct {
 
 	flushPrev common.Hash // Previous node in the flush-list
 	flushNext common.Hash // Next node in the flush-list
+
+	blockNum uint64
 }
 
 // cachedNodeSize is the raw size of a cachedNode data structure without any
@@ -175,6 +178,14 @@ func (n *cachedNode) obj(hash common.Hash) node {
 		return mustDecodeNodeUnsafe(hash[:], node)
 	}
 	return expandNode(hash[:], n.node)
+}
+
+func (n *cachedNode) getBlockNum() uint64 {
+	return n.blockNum
+}
+
+func (n *cachedNode) setBlockNum(blockNum uint64) {
+	n.blockNum = blockNum
 }
 
 // forChilds invokes the callback for all the tracked children of this node,
@@ -309,6 +320,29 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 	return db
 }
 
+func NewDatabaseWithConfigMeta(diskdb, metaDb ethdb.KeyValueStore, config *Config) *Database {
+	var cleans *fastcache.Cache
+	if config != nil && config.Cache > 0 {
+		if config.Journal == "" {
+			cleans = fastcache.New(config.Cache * 1024 * 1024)
+		} else {
+			cleans = fastcache.LoadFromFileOrNew(config.Journal, config.Cache*1024*1024)
+		}
+	}
+	db := &Database{
+		diskdb: diskdb,
+		metaDb: metaDb,
+		cleans: cleans,
+		dirties: map[common.Hash]*cachedNode{{}: {
+			children: make(map[common.Hash]uint16),
+		}},
+	}
+	if config == nil || config.Preimages { // TODO(karalabe): Flip to default off in the future
+		db.preimages = make(map[common.Hash][]byte)
+	}
+	return db
+}
+
 // DiskDB retrieves the persistent storage backing the trie database.
 func (db *Database) DiskDB() ethdb.KeyValueStore {
 	return db.diskdb
@@ -334,6 +368,29 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 		size:      uint16(size),
 		flushPrev: db.newest,
 	}
+
+	// switch n := node.(type) {
+	// case *shortNode:
+	// 	entry.setBlockNum(n.blockNum)
+	// case *fullNode:
+	// 	entry.setBlockNum(n.blockNum)
+	// case *valueNode:
+	// 	entry.setBlockNum(n.blockNum)
+	// case *hashNode:
+	// default:
+	// 	panic(fmt.Sprintf("unknown node type: %T", n))
+	// }
+
+	switch n := node.(type) {
+	case *shortNode:
+		entry.setBlockNum(n.blockNum)
+	case *fullNode:
+		entry.setBlockNum(n.blockNum)
+	case hashNode, *valueNode:
+	default:
+		panic(fmt.Sprintf("unknown node type: %T", n))
+	}
+
 	entry.forChilds(func(child common.Hash) {
 		if c := db.dirties[child]; c != nil {
 			c.parents++
@@ -719,6 +776,9 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
 	// by only uncaching existing data when the database write finalizes.
+
+	log.Info(".......Committing to database")
+
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
 
@@ -739,10 +799,19 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	db.lock.RUnlock()
 
 	uncacher := &cleaner{db}
-	if err := db.commit(node, batch, uncacher, callback); err != nil {
-		log.Error("Failed to commit trie from trie database", "err", err)
-		return err
+	if db.metaDb != nil {
+		batchMeta := db.metaDb.NewBatch()
+		if err := db.commitMeta(node, batch, batchMeta, uncacher, callback); err != nil {
+			log.Error("Failed to commit trie from trie database", "err", err)
+			return err
+		}
+	} else {
+		if err := db.commit(node, batch, uncacher, callback); err != nil {
+			log.Error("Failed to commit trie from trie database", "err", err)
+			return err
+		}
 	}
+
 	// Trie mostly committed to disk, flush any batch leftovers
 	if err := batch.Write(); err != nil {
 		log.Error("Failed to write trie to disk", "err", err)
@@ -777,6 +846,60 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	return nil
 }
 
+func (db *Database) commitMeta(hash common.Hash, batch, batchMeta ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
+	// If the node does not exist, it's a previously committed node
+	db.lock.RLock()
+	node, ok := db.dirties[hash]
+	if !ok {
+		db.lock.RUnlock()
+		return nil
+	}
+	db.lock.RUnlock()
+
+	var err error
+	node.forChilds(func(child common.Hash) {
+		if err == nil {
+			err = db.commitMeta(child, batch, batchMeta, uncacher, callback)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	// If we've reached an optimal batch size, commit and start over
+	rawdb.WriteTrieNode(batch, hash, node.rlp())
+
+	if callback != nil {
+		callback(hash)
+	}
+	if batch.ValueSize() >= ethdb.IdealBatchSize {
+		if err := batch.Write(); err != nil {
+			return err
+		}
+		db.lock.Lock()
+		batch.Replay(uncacher)
+		batch.Reset()
+		db.lock.Unlock()
+	}
+
+	// TODO(asyukii) Write cachedNode's block number to the new db
+	nodeBlockNum := node.getBlockNum()
+	if nodeBlockNum != 0 {
+		rawdb.WriteTrieNodeBlockNum(batchMeta, hash, nodeBlockNum)
+	}
+
+	if batchMeta.ValueSize() >= ethdb.IdealBatchSize {
+		if err := batchMeta.Write(); err != nil {
+			return err
+		}
+		db.lock.Lock()
+		batchMeta.Replay(uncacher)
+		batchMeta.Reset()
+		db.lock.Unlock()
+	}
+
+	return nil
+}
+
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner, callback func(common.Hash)) error {
 	// If the node does not exist, it's a previously committed node
@@ -799,6 +922,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	}
 	// If we've reached an optimal batch size, commit and start over
 	rawdb.WriteTrieNode(batch, hash, node.rlp())
+
 	if callback != nil {
 		callback(hash)
 	}
@@ -811,6 +935,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		batch.Reset()
 		db.lock.Unlock()
 	}
+
 	return nil
 }
 

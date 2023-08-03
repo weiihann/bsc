@@ -691,7 +691,9 @@ func (s *StateDB) getStateObject(addr common.Address) *StateObject {
 func (s *StateDB) getDeletedStateObject(addr common.Address) *StateObject {
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
-		obj.trie.SetBlockNum(s.blockNum)
+		if obj.trie != nil {
+			obj.trie.SetBlockNum(s.blockNum)
+		}
 		return obj
 	}
 	// If no live objects are available, attempt to use snapshots
@@ -1387,6 +1389,7 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() error) (common.Hash, *types.DiffLayer, error) {
+	// TODO(asyukii): commit blockNum of each node as well
 	if s.dbErr != nil {
 		s.StopPrefetcher()
 		return common.Hash{}, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)

@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"encoding/binary"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -100,8 +101,24 @@ func WriteCode(db ethdb.KeyValueWriter, hash common.Hash, code []byte) {
 
 // WriteTrieNode writes the provided trie node database.
 func WriteTrieNode(db ethdb.KeyValueWriter, hash common.Hash, node []byte) {
+	log.Info("WriteTrieNode", "hash", hash)
 	if err := db.Put(hash.Bytes(), node); err != nil {
 		log.Crit("Failed to store trie node", "err", err)
+	}
+}
+
+func uint64ToBytes(num uint64) []byte {
+	// Create a byte slice of 8 bytes (uint64 occupies 8 bytes)
+	bytes := make([]byte, 8)
+	// Use the BigEndian binary encoding to convert the uint64 to bytes
+	binary.BigEndian.PutUint64(bytes, num)
+	return bytes
+}
+
+func WriteTrieNodeBlockNum(db ethdb.KeyValueWriter, hash common.Hash, blockNum uint64) {
+	log.Info("WriteTrieNodeBlockNum", "hash", hash, "blockNum", blockNum)
+	if err := db.Put(hash.Bytes(), uint64ToBytes(blockNum)); err != nil {
+		log.Crit("Failed to store trie node block number", "err", err)
 	}
 }
 

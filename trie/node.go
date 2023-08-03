@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -66,7 +65,6 @@ func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
 
 func (n *fullNode) updateBlockNum(blockNum uint64) {
 	if n.blockNum > blockNum {
-		log.Error("updateBlockNum: blockNum is less than current blockNum", "blockNum", blockNum, "current blockNum", n.blockNum)
 		return
 	}
 	n.blockNum = blockNum
@@ -74,7 +72,6 @@ func (n *fullNode) updateBlockNum(blockNum uint64) {
 
 func (n *shortNode) updateBlockNum(blockNum uint64) {
 	if n.blockNum > blockNum {
-		log.Error("updateBlockNum: blockNum is less than current blockNum", "blockNum", blockNum, "current blockNum", n.blockNum)
 		return
 	}
 	n.blockNum = blockNum

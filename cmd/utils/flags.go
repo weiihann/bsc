@@ -2077,6 +2077,22 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFree
 	return chainDb
 }
 
+func MakeChainDatabaseMeta(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
+	var (
+		cache   = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
+		handles = MakeDatabaseHandles()
+
+		err     error
+		chainDb ethdb.Database
+		name    = "metadata"
+	)
+	chainDb, err = stack.OpenDatabase(name, cache, handles, "", readonly)
+	if err != nil {
+		Fatalf("Could not open database: %v", err)
+	}
+	return chainDb
+}
+
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
@@ -2151,6 +2167,71 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		Fatalf("Can't create BlockChain: %v", err)
 	}
 	return chain, chainDb
+}
+
+func MakeChainMeta(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb, metaDb ethdb.Database) {
+	var err error
+	chainDb = MakeChainDatabase(ctx, stack, false, false) // TODO(rjl493456442) support read-only database
+	metaDb = MakeChainDatabaseMeta(ctx, stack, false, false)
+	config, _, err := core.SetupGenesisBlockMeta(chainDb, metaDb, MakeGenesis(ctx))
+	if err != nil {
+		Fatalf("%v", err)
+	}
+	var engine consensus.Engine
+	if config.Clique != nil {
+		engine = clique.New(config.Clique, chainDb)
+	} else {
+		engine = ethash.NewFaker()
+		if !ctx.GlobalBool(FakePoWFlag.Name) {
+			engine = ethash.New(ethash.Config{
+				CacheDir:         stack.ResolvePath(ethconfig.Defaults.Ethash.CacheDir),
+				CachesInMem:      ethconfig.Defaults.Ethash.CachesInMem,
+				CachesOnDisk:     ethconfig.Defaults.Ethash.CachesOnDisk,
+				CachesLockMmap:   ethconfig.Defaults.Ethash.CachesLockMmap,
+				DatasetDir:       stack.ResolvePath(ethconfig.Defaults.Ethash.DatasetDir),
+				DatasetsInMem:    ethconfig.Defaults.Ethash.DatasetsInMem,
+				DatasetsOnDisk:   ethconfig.Defaults.Ethash.DatasetsOnDisk,
+				DatasetsLockMmap: ethconfig.Defaults.Ethash.DatasetsLockMmap,
+			}, nil, false)
+		}
+	}
+	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
+		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
+	}
+	cache := &core.CacheConfig{
+		TrieCleanLimit:    ethconfig.Defaults.TrieCleanCache,
+		TrieDirtyLimit:    ethconfig.Defaults.TrieDirtyCache,
+		TrieDirtyDisabled: ctx.GlobalString(GCModeFlag.Name) == "archive",
+		TrieTimeLimit:     ethconfig.Defaults.TrieTimeout,
+		TriesInMemory:     ethconfig.Defaults.TriesInMemory,
+		SnapshotLimit:     ethconfig.Defaults.SnapshotCache,
+		Preimages:         ctx.GlobalBool(CachePreimagesFlag.Name),
+	}
+	if cache.TrieDirtyDisabled && !cache.Preimages {
+		cache.Preimages = true
+		log.Info("Enabling recording of key preimages since archive mode is used")
+	}
+	if !ctx.GlobalBool(SnapshotFlag.Name) {
+		cache.SnapshotLimit = 0 // Disabled
+	}
+	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
+		cache.TrieCleanLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
+	}
+	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
+		cache.TrieDirtyLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
+	}
+	if ctx.GlobalIsSet(TriesInMemoryFlag.Name) {
+		cache.TriesInMemory = ctx.GlobalUint64(TriesInMemoryFlag.Name)
+	}
+	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
+
+	// TODO(rjl493456442) disable snapshot generation/wiping if the chain is read only.
+	// Disable transaction indexing/unindexing by default.
+	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
+	if err != nil {
+		Fatalf("Can't create BlockChain: %v", err)
+	}
+	return chain, chainDb, metaDb
 }
 
 // MakeConsolePreloads retrieves the absolute paths for the console JavaScript
