@@ -106,7 +106,11 @@ var (
 	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
-	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
+
+	SnapshotAccountMetaPrefix = []byte("m") // SnapshotAccountMetaPrefix + account hash -> account meta trie value
+	SnapshotStorageMetaPrefix = []byte("y") // SnapshotStorageMetaPrefix + account hash + storage hash -> storage meta trie value
+
+	CodePrefix = []byte("c") // CodePrefix + code hash -> account code
 
 	// difflayer database
 	diffLayerPrefix = []byte("d") // diffLayerPrefix + hash  -> diffLayer
@@ -213,9 +217,17 @@ func accountSnapshotKey(hash common.Hash) []byte {
 	return append(SnapshotAccountPrefix, hash.Bytes()...)
 }
 
+func accountSnapshotKeyMeta(hash common.Hash) []byte {
+	return append(SnapshotAccountMetaPrefix, hash.Bytes()...)
+}
+
 // storageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
 	return append(append(SnapshotStoragePrefix, accountHash.Bytes()...), storageHash.Bytes()...)
+}
+
+func storageSnapshotKeyMeta(accountHash, storageHash common.Hash) []byte {
+	return append(append(SnapshotStorageMetaPrefix, accountHash.Bytes()...), storageHash.Bytes()...)
 }
 
 // storageSnapshotsKey = SnapshotStoragePrefix + account hash + storage hash

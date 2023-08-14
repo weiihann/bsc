@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
+
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
 
@@ -40,6 +41,7 @@ var (
 	// filters that's stored in every diff layer. Don't do that without fully
 	// understanding all the implications.
 	aggregatorMemoryLimit = uint64(4 * 1024 * 1024)
+	// aggregatorMemoryLimit = uint64(1024)
 
 	// aggregatorItemLimit is an approximate number of items that will end up
 	// in the agregator layer before it's flushed out to disk. A plain account
@@ -121,7 +123,8 @@ type diffLayer struct {
 	verifiedCh chan struct{} // the difflayer is verified when verifiedCh is nil or closed
 	valid      bool          // mark the difflayer is valid or not.
 
-	diffed *bloomfilter.Filter // Bloom filter tracking all the diffed items up to the disk layer
+	diffed   *bloomfilter.Filter // Bloom filter tracking all the diffed items up to the disk layer
+	blockNum uint64
 
 	lock sync.RWMutex
 }
@@ -171,7 +174,7 @@ func (h storageBloomHasher) Sum64() uint64 {
 
 // newDiffLayer creates a new diff on top of an existing snapshot, whether that's a low
 // level persistent database or a hierarchical diff already.
-func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) *diffLayer {
+func newDiffLayer(parent snapshot, root common.Hash, blockNum uint64, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) *diffLayer {
 	// Create the new layer with some pre-allocated data segments
 	dl := &diffLayer{
 		parent:      parent,
@@ -181,6 +184,7 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 		storageData: storage,
 		storageList: make(map[common.Hash][]common.Hash),
 		verifiedCh:  verified,
+		blockNum:    blockNum,
 	}
 
 	switch parent := parent.(type) {
@@ -213,6 +217,13 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 	}
 	dl.memory += uint64(len(destructs) * common.HashLength)
 	return dl
+}
+
+func (dl *diffLayer) SetBlockNum(num uint64) {
+	if dl.blockNum > num {
+		return
+	}
+	dl.blockNum = num
 }
 
 // rebloom discards the layer's current bloom and rebuilds it from scratch based
@@ -483,8 +494,8 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 
 // Update creates a new layer on top of the existing snapshot diff tree with
 // the specified data items.
-func (dl *diffLayer) Update(blockRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) *diffLayer {
-	return newDiffLayer(dl, blockRoot, destructs, accounts, storage, verified)
+func (dl *diffLayer) Update(blockRoot common.Hash, blockNum uint64, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) *diffLayer {
+	return newDiffLayer(dl, blockRoot, blockNum, destructs, accounts, storage, verified)
 }
 
 // flatten pushes all data from this point downwards, flattening everything into
@@ -542,6 +553,7 @@ func (dl *diffLayer) flatten() snapshot {
 		storageList: make(map[common.Hash][]common.Hash),
 		diffed:      dl.diffed,
 		memory:      parent.memory + dl.memory,
+		blockNum:    dl.blockNum,
 	}
 }
 

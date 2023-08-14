@@ -368,7 +368,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
-	if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil {
+	if _, err := state.New(head.Root(), bc.stateCache, bc.snaps, head.NumberU64()); err != nil {
 		// Head state is missing, before the state recovery, find out the
 		// disk layer point of snapshot(if it's enabled). Make sure the
 		// rewound point is lower than disk layer.
@@ -745,7 +745,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 
 					enoughBeyondCount = beyondCount > maxBeyondBlocks
 
-					if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps); err != nil {
+					if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps, newHeadBlock.NumberU64()); err != nil {
 						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
 						if pivot == nil || newHeadBlock.NumberU64() > *pivot {
 							parent := bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1)
@@ -895,8 +895,8 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 }
 
 // StateAtWithSharedPool returns a new mutable state based on a particular point in time with sharedStorage
-func (bc *BlockChain) StateAtWithSharedPool(root common.Hash) (*state.StateDB, error) {
-	return state.NewWithSharedPool(root, bc.stateCache, bc.snaps)
+func (bc *BlockChain) StateAtWithSharedPool(root common.Hash, blockNum uint64) (*state.StateDB, error) {
+	return state.NewWithSharedPool(root, bc.stateCache, bc.snaps, blockNum)
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -1500,6 +1500,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB) error {
+	state.SetBlockNum(block.NumberU64())
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
@@ -1936,7 +1937,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.NewWithSharedPool(parent.Root, bc.stateCache, bc.snaps)
+		statedb, err := state.NewWithSharedPool(parent.Root, bc.stateCache, bc.snaps, parent.Number.Uint64())
 		if err != nil {
 			return it.index, err
 		}

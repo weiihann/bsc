@@ -146,16 +146,18 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+
+	BlockNum uint64
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
-	return newStateDB(root, db, snaps)
+func New(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
+	return newStateDB(root, db, snaps, blockNum)
 }
 
 // NewWithSharedPool creates a new state with sharedStorge on layer 1.5
-func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
-	statedb, err := newStateDB(root, db, snaps)
+func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
+	statedb, err := newStateDB(root, db, snaps, blockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +165,7 @@ func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree) (*St
 	return statedb, nil
 }
 
-func newStateDB(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+func newStateDB(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                  db,
 		originalRoot:        root,
@@ -175,6 +177,7 @@ func newStateDB(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, 
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
 		hasher:              crypto.NewKeccakState(),
+		BlockNum:            blockNum,
 	}
 
 	if sdb.snaps != nil {
@@ -194,6 +197,13 @@ func newStateDB(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, 
 	_, sdb.noTrie = tr.(*trie.EmptyTrie)
 	sdb.trie = tr
 	return sdb, nil
+}
+
+func (s *StateDB) SetBlockNum(blockNum uint64) {
+	if s.BlockNum > blockNum {
+		return
+	}
+	s.BlockNum = blockNum
 }
 
 func (s *StateDB) EnableWriteOnSharedStorage() {
@@ -1339,7 +1349,8 @@ func (s *StateDB) LightCommit() (common.Hash, *types.DiffLayer, error) {
 				// Only update if there's a state transition (skip empty Clique blocks)
 				if parent := s.snap.Root(); parent != root {
 					// for light commit, always do sync commit
-					if err := s.snaps.Update(root, parent, s.snapDestructs, s.snapAccounts, s.snapStorage, nil); err != nil {
+					log.Info("StateDB.LightCommit", "blockNum", s.BlockNum)
+					if err := s.snaps.Update(root, s.BlockNum, parent, s.snapDestructs, s.snapAccounts, s.snapStorage, nil); err != nil {
 						log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 					}
 					// Keep n diff layers in the memory
@@ -1566,7 +1577,7 @@ func (s *StateDB) Commit(failPostCommitFunc func(), postCommitFuncs ...func() er
 				diffLayer.Destructs, diffLayer.Accounts, diffLayer.Storages = s.SnapToDiffLayer()
 				// Only update if there's a state transition (skip empty Clique blocks)
 				if parent := s.snap.Root(); parent != s.expectedRoot {
-					err := s.snaps.Update(s.expectedRoot, parent, s.snapDestructs, s.snapAccounts, s.snapStorage, verified)
+					err := s.snaps.Update(s.expectedRoot, s.BlockNum, parent, s.snapDestructs, s.snapAccounts, s.snapStorage, verified)
 
 					if err != nil {
 						log.Warn("Failed to update snapshot tree", "from", parent, "to", s.expectedRoot, "err", err)

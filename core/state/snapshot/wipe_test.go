@@ -31,7 +31,7 @@ func TestWipe(t *testing.T) {
 	// Create a database with some random snapshot data
 	db := memorydb.New()
 	for i := 0; i < 128; i++ {
-		rawdb.WriteAccountSnapshot(db, randomHash(), randomHash().Bytes())
+		rawdb.WriteAccountSnapshot(db, randomHash(), randomHash().Bytes(), 0)
 	}
 	// Add some random non-snapshot data too to make wiping harder
 	for i := 0; i < 500; i++ {
