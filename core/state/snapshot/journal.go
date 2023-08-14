@@ -271,7 +271,7 @@ func loadDiffLayer(parent snapshot, r *rlp.Stream) (snapshot, error) {
 		}
 		storageData[entry.Hash] = slots
 	}
-	return loadDiffLayer(newDiffLayer(parent, root, destructSet, accountData, storageData, nil), r)
+	return loadDiffLayer(newDiffLayer(parent, root, 0, destructSet, accountData, storageData, nil), r)
 }
 
 // Journal terminates any in-progress snapshot generation, also implicitly pushing

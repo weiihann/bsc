@@ -2078,7 +2078,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		// outdated during the sync, but it can be fixed later during the
 		// snapshot generation.
 		for j := 0; j < len(res.hashes[i]); j++ {
-			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
+			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j], 0)
 
 			// If we're storing large contracts, generate the trie nodes
 			// on the fly to not trash the gluing points
@@ -2275,7 +2275,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			break
 		}
 		slim := snapshot.SlimAccountRLP(res.accounts[i].Nonce, res.accounts[i].Balance, res.accounts[i].Root, res.accounts[i].CodeHash)
-		rawdb.WriteAccountSnapshot(batch, hash, slim)
+		rawdb.WriteAccountSnapshot(batch, hash, slim, 0)
 
 		// If the task is complete, drop it into the stack trie to generate
 		// account trie nodes for it
@@ -2900,12 +2900,12 @@ func (s *Syncer) onHealState(paths [][]byte, value []byte) error {
 			return nil
 		}
 		blob := snapshot.SlimAccountRLP(account.Nonce, account.Balance, account.Root, account.CodeHash)
-		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), blob)
+		rawdb.WriteAccountSnapshot(s.stateWriter, common.BytesToHash(paths[0]), blob, 0)
 		s.accountHealed += 1
 		s.accountHealedBytes += common.StorageSize(1 + common.HashLength + len(blob))
 	}
 	if len(paths) == 2 {
-		rawdb.WriteStorageSnapshot(s.stateWriter, common.BytesToHash(paths[0]), common.BytesToHash(paths[1]), value)
+		rawdb.WriteStorageSnapshot(s.stateWriter, common.BytesToHash(paths[0]), common.BytesToHash(paths[1]), value, 0)
 		s.storageHealed += 1
 		s.storageHealedBytes += common.StorageSize(1 + 2*common.HashLength + len(value))
 	}

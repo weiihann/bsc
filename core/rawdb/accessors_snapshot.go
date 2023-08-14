@@ -79,9 +79,27 @@ func ReadAccountSnapshot(db ethdb.KeyValueReader, hash common.Hash) []byte {
 }
 
 // WriteAccountSnapshot stores the snapshot entry of an account trie leaf.
-func WriteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash, entry []byte) {
+func WriteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash, entry []byte, blockNum uint64) {
 	if err := db.Put(accountSnapshotKey(hash), entry); err != nil {
 		log.Crit("Failed to store account snapshot", "err", err)
+	}
+
+	WriteAccountSnapshotMeta(db, hash, blockNum)
+}
+
+func uint64ToBytes(num uint64) []byte {
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], num)
+	return buf[:]
+}
+
+func WriteAccountSnapshotMeta(db ethdb.KeyValueWriter, hash common.Hash, blockNum uint64) {
+	if blockNum == 0 {
+		return
+	}
+
+	if err := db.Put(accountSnapshotKeyMeta(hash), uint64ToBytes(blockNum)); err != nil {
+		log.Crit("Failed to store account snapshot meta", "err", err)
 	}
 }
 
@@ -99,9 +117,20 @@ func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash commo
 }
 
 // WriteStorageSnapshot stores the snapshot entry of an storage trie leaf.
-func WriteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash common.Hash, entry []byte) {
+func WriteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash common.Hash, entry []byte, blockNum uint64) {
 	if err := db.Put(storageSnapshotKey(accountHash, storageHash), entry); err != nil {
 		log.Crit("Failed to store storage snapshot", "err", err)
+	}
+
+	WriteStorageSnapshotMeta(db, accountHash, storageHash, blockNum)
+}
+
+func WriteStorageSnapshotMeta(db ethdb.KeyValueWriter, accountHash, storageHash common.Hash, blockNum uint64) {
+	if blockNum == 0 {
+		return
+	}
+	if err := db.Put(storageSnapshotKeyMeta(accountHash, storageHash), uint64ToBytes(blockNum)); err != nil {
+		log.Crit("Failed to store storage snapshot meta", "err", err)
 	}
 }
 

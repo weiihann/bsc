@@ -34,13 +34,13 @@ type stateTest struct {
 
 func newStateTest() *stateTest {
 	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(common.Hash{}, NewDatabase(db), nil)
+	sdb, _ := New(common.Hash{}, NewDatabase(db), nil, 0)
 	return &stateTest{db: db, state: sdb}
 }
 
 func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(common.Hash{}, NewDatabaseWithConfig(db, nil), nil)
+	sdb, _ := New(common.Hash{}, NewDatabaseWithConfig(db, nil), nil, 0)
 	s := &stateTest{db: db, state: sdb}
 
 	// generate a few entries
@@ -153,7 +153,7 @@ func TestSnapshotEmpty(t *testing.T) {
 }
 
 func TestSnapshot2(t *testing.T) {
-	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil, 0)
 
 	stateobjaddr0 := common.BytesToAddress([]byte("so0"))
 	stateobjaddr1 := common.BytesToAddress([]byte("so1"))
@@ -177,7 +177,7 @@ func TestSnapshot2(t *testing.T) {
 	state.Finalise(false)
 	state.AccountsIntermediateRoot()
 	root, _, _ := state.Commit(nil)
-	state, _ = New(root, state.db, state.snaps)
+	state, _ = New(root, state.db, state.snaps, 0)
 
 	// and one with deleted == true
 	so1 := state.getStateObject(stateobjaddr1)

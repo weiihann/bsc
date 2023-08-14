@@ -143,7 +143,7 @@ type snapshot interface {
 	// the specified data items.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	Update(blockRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) *diffLayer
+	Update(blockRoot common.Hash, blockNum uint64, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) *diffLayer
 
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the snapshot without
@@ -343,14 +343,14 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 	return ret
 }
 
-func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Address]struct{}, accounts map[common.Address][]byte, storage map[common.Address]map[string][]byte, verified chan struct{}) error {
+func (t *Tree) Update(blockRoot common.Hash, blockNum uint64, parentRoot common.Hash, destructs map[common.Address]struct{}, accounts map[common.Address][]byte, storage map[common.Address]map[string][]byte, verified chan struct{}) error {
 	hashDestructs, hashAccounts, hashStorage := transformSnapData(destructs, accounts, storage)
-	return t.update(blockRoot, parentRoot, hashDestructs, hashAccounts, hashStorage, verified)
+	return t.update(blockRoot, blockNum, parentRoot, hashDestructs, hashAccounts, hashStorage, verified)
 }
 
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
-func (t *Tree) update(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) error {
+func (t *Tree) update(blockRoot common.Hash, blockNum uint64, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, verified chan struct{}) error {
 	// Reject noop updates to avoid self-loops in the snapshot tree. This is a
 	// special case that can only happen for Clique networks where empty blocks
 	// don't modify the state (0 block subsidy).
@@ -365,7 +365,7 @@ func (t *Tree) update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	if parent == nil {
 		return fmt.Errorf("parent [%#x] snapshot missing", parentRoot)
 	}
-	snap := parent.(snapshot).Update(blockRoot, destructs, accounts, storage, verified)
+	snap := parent.(snapshot).Update(blockRoot, blockNum, destructs, accounts, storage, verified)
 
 	// Save the new snapshot for later
 	t.lock.Lock()
@@ -539,9 +539,10 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 // be discarded if the whole transition if not finished.
 func diffToDisk(bottom *diffLayer) *diskLayer {
 	var (
-		base  = bottom.parent.(*diskLayer)
-		batch = base.diskdb.NewBatch()
-		stats *generatorStats
+		base     = bottom.parent.(*diskLayer)
+		batch    = base.diskdb.NewBatch()
+		stats    *generatorStats
+		blockNum = bottom.blockNum
 	)
 	// If the disk layer is running a snapshot generator, abort it
 	if base.genAbort != nil {
@@ -597,7 +598,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			continue
 		}
 		// Push the account to disk
-		rawdb.WriteAccountSnapshot(batch, hash, data)
+		rawdb.WriteAccountSnapshot(batch, hash, data, blockNum)
 		base.cache.Set(hash[:], data)
 		snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
 
@@ -629,7 +630,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 				continue
 			}
 			if len(data) > 0 {
-				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
+				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data, blockNum)
 				base.cache.Set(append(accountHash[:], storageHash[:]...), data)
 				snapshotCleanStorageWriteMeter.Mark(int64(len(data)))
 			} else {

@@ -634,7 +634,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			} else {
 				data := SlimAccountRLP(acc.Nonce, acc.Balance, acc.Root, acc.CodeHash)
 				dataLen = len(data)
-				rawdb.WriteAccountSnapshot(batch, accountHash, data)
+				rawdb.WriteAccountSnapshot(batch, accountHash, data, 0)
 				snapGeneratedAccountMeter.Mark(1)
 			}
 			stats.storage += common.StorageSize(1 + common.HashLength + dataLen)
@@ -682,7 +682,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					return nil
 				}
 				if write {
-					rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(key), val)
+					rawdb.WriteStorageSnapshot(batch, accountHash, common.BytesToHash(key), val, 0)
 					snapGeneratedStorageMeter.Mark(1)
 				} else {
 					snapRecoveredStorageMeter.Mark(1)

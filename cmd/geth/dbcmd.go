@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -62,6 +63,7 @@ Remove blockchain and state databases`,
 		Category:  "DATABASE COMMANDS",
 		Subcommands: []cli.Command{
 			dbInspectCmd,
+			dbInspectKVCmd,
 			dbStatCmd,
 			dbCompactCmd,
 			dbGetCmd,
@@ -87,6 +89,17 @@ Remove blockchain and state databases`,
 		},
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
+	}
+	dbInspectKVCmd = cli.Command{
+		Action:    utils.MigrateFlags(inspectKV),
+		Name:      "inspect-kv",
+		ArgsUsage: "<range>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+		},
+		Usage:       "Inspect the the number of key-value pairs accessed from genesis block to the latest block",
+		Description: `This commands iterates the entire database. The default range is from the genesis block to the latest block.`,
 	}
 	dbStatCmd = cli.Command{
 		Action: utils.MigrateFlags(dbStats),
@@ -311,6 +324,53 @@ func inspect(ctx *cli.Context) error {
 	defer db.Close()
 
 	return rawdb.InspectDatabase(db, prefix, start)
+}
+
+func inspectKV(ctx *cli.Context) error {
+	if ctx.NArg() > 1 {
+		return fmt.Errorf("max 1 argument: %v", ctx.Command.ArgsUsage)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true, false)
+	defer db.Close()
+
+	var fromBlock, toBlock uint64
+	var bucketRange uint64
+
+	headerHash := rawdb.ReadHeadHeaderHash(db)
+	latestBlock := *(rawdb.ReadHeaderNumber(db, headerHash))
+	defaultBucketRange := uint64(5256000) // 6 months
+
+	fromBlock = 1
+	toBlock = latestBlock
+
+	if ctx.NArg() == 1 {
+		bucketRange, _ = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+	} else {
+		bucketRange = defaultBucketRange
+	}
+
+	if bucketRange > (toBlock - fromBlock + 1) {
+		return fmt.Errorf("bucketRange is larger than block range")
+	}
+
+	if toBlock == math.MaxUint64 {
+		return fmt.Errorf("toBlock is math.MaxUint64")
+	}
+
+	inspector, err := rawdb.NewMetaInspector(db, fromBlock, toBlock, bucketRange)
+	if err != nil {
+		fmt.Printf("fail to create meta inspector\n")
+		return err
+	}
+	inspector.Run()
+
+	inspector.Display()
+
+	return nil
 }
 
 func ancientInspect(ctx *cli.Context) error {
