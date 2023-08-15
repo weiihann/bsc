@@ -334,7 +334,7 @@ func inspectKV(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	db := utils.MakeChainDatabase(ctx, stack, true, false)
+	db := utils.MakeChainDatabase(ctx, stack, true, true)
 	defer db.Close()
 
 	var fromBlock, toBlock uint64
