@@ -58,6 +58,7 @@ Remove blockchain and state databases`,
 		ArgsUsage: "",
 		Subcommands: []*cli.Command{
 			dbInspectCmd,
+			dbInspectKVCmd,
 			dbStatCmd,
 			dbCompactCmd,
 			dbGetCmd,
@@ -83,6 +84,16 @@ Remove blockchain and state databases`,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
+	}
+	dbInspectKVCmd = &cli.Command{
+		Action:    inspectKV,
+		Name:      "inspect-kv",
+		ArgsUsage: "<range>",
+		Flags: flags.Merge([]cli.Flag{
+			utils.SyncModeFlag,
+		}, utils.NetworkFlags, utils.DatabasePathFlags),
+		Usage:       "Inspect the the number of key-value pairs accessed from genesis block to the latest block",
+		Description: `This commands iterates the entire database. The default range is from the genesis block to the latest block.`,
 	}
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
@@ -207,6 +218,49 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 of ancientStore, will also displays the reserved number of blocks in ancientStore `,
 	}
 )
+
+func inspectKV(ctx *cli.Context) error {
+	if ctx.NArg() > 1 {
+		return fmt.Errorf("max 1 argument: %v", ctx.Command.ArgsUsage)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true, true)
+	defer db.Close()
+
+	var fromBlock, toBlock uint64
+	var bucketRange uint64
+
+	headerHash := rawdb.ReadHeadHeaderHash(db)
+	latestBlock := *(rawdb.ReadHeaderNumber(db, headerHash))
+	defaultBucketRange := uint64(5256000) // 6 months
+
+	fromBlock = 1
+	toBlock = latestBlock
+
+	if ctx.NArg() == 1 {
+		bucketRange, _ = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+	} else {
+		bucketRange = defaultBucketRange
+	}
+
+	if bucketRange > (toBlock - fromBlock + 1) {
+		return fmt.Errorf("bucketRange is larger than block range, bucketRange: %d, blockRange: %d", bucketRange, toBlock-fromBlock+1)
+	}
+
+	inspector, err := rawdb.NewMetaInspector(db, fromBlock, toBlock, bucketRange)
+	if err != nil {
+		fmt.Printf("fail to create meta inspector\n")
+		return err
+	}
+	inspector.Run()
+
+	inspector.Display()
+
+	return nil
+}
 
 func removeDB(ctx *cli.Context) error {
 	stack, config := makeConfigNode(ctx)

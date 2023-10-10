@@ -593,21 +593,23 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		logged = time.Now()
 
 		// Key-value store statistics
-		headers         stat
-		bodies          stat
-		receipts        stat
-		tds             stat
-		numHashPairings stat
-		hashNumPairings stat
-		tries           stat
-		codes           stat
-		txLookups       stat
-		accountSnaps    stat
-		storageSnaps    stat
-		preimages       stat
-		bloomBits       stat
-		cliqueSnaps     stat
-		parliaSnaps     stat
+		headers          stat
+		bodies           stat
+		receipts         stat
+		tds              stat
+		numHashPairings  stat
+		hashNumPairings  stat
+		tries            stat
+		codes            stat
+		txLookups        stat
+		accountSnaps     stat
+		accountSnapsMeta stat
+		storageSnaps     stat
+		storageSnapsMeta stat
+		preimages        stat
+		bloomBits        stat
+		cliqueSnaps      stat
+		parliaSnaps      stat
 
 		// Les statistic
 		chtTrieNodes   stat
@@ -650,6 +652,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			accountSnaps.Add(size)
 		case bytes.HasPrefix(key, SnapshotStoragePrefix) && len(key) == (len(SnapshotStoragePrefix)+2*common.HashLength):
 			storageSnaps.Add(size)
+		case bytes.HasPrefix(key, SnapshotAccountMetaPrefix) && len(key) == (len(SnapshotAccountMetaPrefix)+common.HashLength):
+			accountSnapsMeta.Add(size)
+		case bytes.HasPrefix(key, SnapshotStorageMetaPrefix) && len(key) == (len(SnapshotStorageMetaPrefix)+2*common.HashLength):
+			storageSnapsMeta.Add(size)
 		case bytes.HasPrefix(key, PreimagePrefix) && len(key) == (len(PreimagePrefix)+common.HashLength):
 			preimages.Add(size)
 		case bytes.HasPrefix(key, configPrefix) && len(key) == (len(configPrefix)+common.HashLength):
@@ -711,6 +717,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
 		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},
+		{"Key-Value store", "Account snapshot meta", accountSnapsMeta.Size(), accountSnapsMeta.Count()},
+		{"Key-Value store", "Storage snapshot meta", storageSnapsMeta.Size(), storageSnapsMeta.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
 		{"Key-Value store", "Parlia snapshots", parliaSnaps.Size(), parliaSnaps.Count()},
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
