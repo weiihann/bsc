@@ -963,8 +963,8 @@ func (bc *BlockChain) SnapSyncCommitHead(hash common.Hash) error {
 }
 
 // StateAtWithSharedPool returns a new mutable state based on a particular point in time with sharedStorage
-func (bc *BlockChain) StateAtWithSharedPool(root common.Hash) (*state.StateDB, error) {
-	return state.NewWithSharedPool(root, bc.stateCache, bc.snaps)
+func (bc *BlockChain) StateAtWithSharedPool(root common.Hash, blockNum uint64) (*state.StateDB, error) {
+	return state.NewWithSharedPool(root, bc.stateCache, bc.snaps, blockNum)
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -1498,6 +1498,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
+	state.SetBlockNum(block.NumberU64())
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
@@ -1934,7 +1935,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.NewWithSharedPool(parent.Root, bc.stateCache, bc.snaps)
+		statedb, err := state.NewWithSharedPool(parent.Root, bc.stateCache, bc.snaps, parent.Number.Uint64())
 		if err != nil {
 			return it.index, err
 		}

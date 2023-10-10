@@ -161,7 +161,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 		st = NewState(ctx, header, lc.Odr())
 	} else {
 		header := bc.GetHeaderByHash(bhash)
-		st, _ = state.New(header.Root, bc.StateCache(), nil)
+		st, _ = state.New(header.Root, bc.StateCache(), nil, 0)
 	}
 
 	var res []byte
@@ -195,7 +195,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		} else {
 			chain = bc
 			header = bc.GetHeaderByHash(bhash)
-			st, _ = state.New(header.Root, bc.StateCache(), nil)
+			st, _ = state.New(header.Root, bc.StateCache(), nil, 0)
 		}
 
 		// Perform read-only call.
