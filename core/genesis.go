@@ -128,7 +128,7 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	db := state.NewDatabase(rawdb.NewMemoryDatabase())
-	statedb, err := state.New(types.EmptyRootHash, db, nil)
+	statedb, err := state.New(types.EmptyRootHash, db, nil, 0)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -153,7 +153,7 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 	if trieConfig != nil {
 		trieConfig.NoTries = false
 	}
-	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil, 0)
 	if err != nil {
 		return err
 	}

@@ -161,11 +161,13 @@ type StateDB struct {
 	StorageUpdated int
 	AccountDeleted int
 	StorageDeleted int
+
+	BlockNum uint64
 }
 
 // NewWithSharedPool creates a new state with sharedStorge on layer 1.5
-func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
-	statedb, err := New(root, db, snaps)
+func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
+	statedb, err := New(root, db, snaps, blockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +176,7 @@ func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree) (*St
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+func New(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                   db,
 		originalRoot:         root,
@@ -193,6 +195,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
+		BlockNum:             blockNum,
 	}
 
 	if sdb.snaps != nil {
@@ -207,6 +210,13 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	_, sdb.noTrie = tr.(*trie.EmptyTrie)
 	sdb.trie = tr
 	return sdb, nil
+}
+
+func (s *StateDB) SetBlockNum(blockNum uint64) {
+	if s.BlockNum > blockNum {
+		return
+	}
+	s.BlockNum = blockNum
 }
 
 func (s *StateDB) EnableWriteOnSharedStorage() {
@@ -1704,7 +1714,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 				diffLayer.Destructs, diffLayer.Accounts, diffLayer.Storages = s.SnapToDiffLayer()
 				// Only update if there's a state transition (skip empty Clique blocks)
 				if parent := s.snap.Root(); parent != s.expectedRoot {
-					err := s.snaps.Update(s.expectedRoot, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages, verified)
+					err := s.snaps.Update(s.expectedRoot, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages, verified, s.BlockNum)
 
 					if err != nil {
 						log.Warn("Failed to update snapshot tree", "from", parent, "to", s.expectedRoot, "err", err)

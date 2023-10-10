@@ -107,7 +107,7 @@ func TestReopenIterator(t *testing.T) {
 		db = rawdb.NewMemoryDatabase()
 	)
 	for key, val := range content {
-		rawdb.WriteAccountSnapshot(db, key, []byte(val))
+		rawdb.WriteAccountSnapshot(db, key, []byte(val), 0)
 	}
 	checkVal := func(it *holdableIterator, index int) {
 		if !bytes.Equal(it.Key(), append(rawdb.SnapshotAccountPrefix, order[index].Bytes()...)) {

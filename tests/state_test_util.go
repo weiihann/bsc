@@ -208,7 +208,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 		return snaps, statedb, fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
 	// Re-init the post-state instance for further operation
-	statedb, err = state.New(root, statedb.Database(), snaps)
+	statedb, err = state.New(root, statedb.Database(), snaps, 0)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -297,7 +297,7 @@ func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter bool) (*snapshot.Tree, *state.StateDB) {
 	sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
-	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
+	statedb, _ := state.New(types.EmptyRootHash, sdb, nil, 0)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -321,7 +321,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, sdb.TrieDB(), root, 128, false)
 	}
-	statedb, _ = state.New(root, sdb, snaps)
+	statedb, _ = state.New(root, sdb, snaps, 0)
 	return snaps, statedb
 }
 
