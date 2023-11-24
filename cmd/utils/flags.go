@@ -1954,8 +1954,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(TransactionHistoryFlag.Name) {
 		cfg.TransactionHistory = ctx.Uint64(TransactionHistoryFlag.Name)
 	} else if ctx.IsSet(TxLookupLimitFlag.Name) {
-		log.Warn("The flag --txlookuplimit is deprecated and will be removed, please use --history.transactions")
-		cfg.TransactionHistory = ctx.Uint64(TransactionHistoryFlag.Name)
+		Fatalf("The flag --txlookuplimit is deprecated and may cause unexpected performance degradation issues. Please use --history.transactions instead.")
 	}
 	if ctx.IsSet(PathDBSyncFlag.Name) {
 		cfg.PathSyncFlush = true
