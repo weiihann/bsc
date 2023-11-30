@@ -88,7 +88,7 @@ Remove blockchain and state databases`,
 	dbInspectKVCmd = &cli.Command{
 		Action:    inspectKV,
 		Name:      "inspect-kv",
-		ArgsUsage: "<range>",
+		ArgsUsage: "<range> <fromBlock> <toBlock>",
 		Flags: flags.Merge([]cli.Flag{
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
@@ -220,8 +220,8 @@ of ancientStore, will also displays the reserved number of blocks in ancientStor
 )
 
 func inspectKV(ctx *cli.Context) error {
-	if ctx.NArg() > 1 {
-		return fmt.Errorf("max 1 argument: %v", ctx.Command.ArgsUsage)
+	if ctx.NArg() > 3 {
+		return fmt.Errorf("max 3 arguments: %v", ctx.Command.ArgsUsage)
 	}
 
 	stack, _ := makeConfigNode(ctx)
@@ -230,20 +230,22 @@ func inspectKV(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true, true)
 	defer db.Close()
 
-	var fromBlock, toBlock uint64
-	var bucketRange uint64
-
 	headerHash := rawdb.ReadHeadHeaderHash(db)
 	latestBlock := *(rawdb.ReadHeaderNumber(db, headerHash))
-	defaultBucketRange := uint64(5256000) // 6 months
 
-	fromBlock = 1
-	toBlock = latestBlock
+	bucketRange := uint64(5256000) // 6 months
+	fromBlock := uint64(1)
+	toBlock := latestBlock
 
 	if ctx.NArg() == 1 {
 		bucketRange, _ = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
-	} else {
-		bucketRange = defaultBucketRange
+	} else if ctx.NArg() == 2 {
+		bucketRange, _ = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+		fromBlock, _ = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+	} else if ctx.NArg() == 3 {
+		bucketRange, _ = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+		fromBlock, _ = strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+		toBlock, _ = strconv.ParseUint(ctx.Args().Get(2), 10, 64)
 	}
 
 	if bucketRange > (toBlock - fromBlock + 1) {
@@ -719,6 +721,37 @@ func (iter *snapshotIterator) Release() {
 	iter.storage.Release()
 }
 
+type snapshotMetaIterator struct {
+	init    bool
+	account ethdb.Iterator
+	storage ethdb.Iterator
+}
+
+func (iter *snapshotMetaIterator) Next() (byte, []byte, []byte, bool) {
+	if !iter.init {
+		iter.init = true
+		return utils.OpBatchDel, rawdb.SnapshotRootKey, nil, true
+	}
+	for iter.account.Next() {
+		key := iter.account.Key()
+		if bytes.HasPrefix(key, rawdb.SnapshotAccountMetaPrefix) && len(key) == (len(rawdb.SnapshotAccountMetaPrefix)+common.HashLength) {
+			return utils.OpBatchAdd, key, iter.account.Value(), true
+		}
+	}
+	for iter.storage.Next() {
+		key := iter.storage.Key()
+		if bytes.HasPrefix(key, rawdb.SnapshotStorageMetaPrefix) && len(key) == (len(rawdb.SnapshotStorageMetaPrefix)+2*common.HashLength) {
+			return utils.OpBatchAdd, key, iter.storage.Value(), true
+		}
+	}
+	return 0, nil, nil, false
+}
+
+func (iter *snapshotMetaIterator) Release() {
+	iter.account.Release()
+	iter.storage.Release()
+}
+
 // chainExporters defines the export scheme for all exportable chain data.
 var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator{
 	"preimage": func(db ethdb.Database) utils.ChainDataIterator {
@@ -729,6 +762,11 @@ var chainExporters = map[string]func(db ethdb.Database) utils.ChainDataIterator{
 		account := db.NewIterator(rawdb.SnapshotAccountPrefix, nil)
 		storage := db.NewIterator(rawdb.SnapshotStoragePrefix, nil)
 		return &snapshotIterator{account: account, storage: storage}
+	},
+	"snapshot-meta": func(db ethdb.Database) utils.ChainDataIterator {
+		account := db.NewIterator(rawdb.SnapshotAccountMetaPrefix, nil)
+		storage := db.NewIterator(rawdb.SnapshotStorageMetaPrefix, nil)
+		return &snapshotMetaIterator{account: account, storage: storage}
 	},
 }
 
