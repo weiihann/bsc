@@ -20,6 +20,7 @@ package utils
 import (
 	"bufio"
 	"compress/gzip"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -458,6 +459,16 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 		case OpBatchDel:
 			batch.Delete(key)
 		case OpBatchAdd:
+			if header.Kind == "snapshot-meta" {
+				oriVal, _ := db.Get(key)
+				if oriVal != nil {
+					oriBlockNum := binary.BigEndian.Uint64(oriVal)
+					newBlockNum := binary.BigEndian.Uint64(val)
+					if oriBlockNum > newBlockNum {
+						continue
+					}
+				}
+			}
 			batch.Put(key, val)
 		default:
 			return fmt.Errorf("unknown op %d\n", op)
