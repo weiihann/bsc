@@ -232,16 +232,15 @@ var (
 		NanoBlock:           big.NewInt(23482428),
 		MoranBlock:          big.NewInt(23603940),
 		PlanckBlock:         big.NewInt(28196022),
-
-		// TODO modify blockNumber, make sure the blockNumber is not an integer multiple of 200 (epoch number)
-		// TODO Caution !!! it should be very careful !!!
-		LubanBlock: big.NewInt(29295050),
-		PlatoBlock: big.NewInt(29861024),
-		// TODO modify blockNumber, make sure HertzBlock=BerlinBlock=LondonBlock to enable Berlin and London EIPs
-		BerlinBlock:   big.NewInt(31103030),
-		LondonBlock:   big.NewInt(31103030),
-		HertzBlock:    big.NewInt(31103030),
-		HertzfixBlock: big.NewInt(35682300),
+		LubanBlock:          big.NewInt(29295050),
+		PlatoBlock:          big.NewInt(29861024),
+		BerlinBlock:         big.NewInt(31103030),
+		LondonBlock:         big.NewInt(31103030),
+		HertzBlock:          big.NewInt(31103030),
+		HertzfixBlock:       big.NewInt(35682300),
+		// UnixTime: 1702972800 is December 19, 2023 8:00:00 AM UTC
+		ShanghaiTime: newUint64(1702972800),
+		KeplerTime:   newUint64(1702972800),
 
 		Parlia: &ParliaConfig{
 			Period: 3,
