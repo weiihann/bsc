@@ -27,8 +27,9 @@ type expHeap []expItem
 
 // expItem is an entry in addrHistory.
 type expItem struct {
-	item string
-	exp  mclock.AbsTime
+	count uint16
+	item  string
+	exp   mclock.AbsTime
 }
 
 // nextExpiry returns the next expiry time.
@@ -38,7 +39,11 @@ func (h *expHeap) nextExpiry() mclock.AbsTime {
 
 // add adds an item and sets its expiry time.
 func (h *expHeap) add(item string, exp mclock.AbsTime) {
-	heap.Push(h, expItem{item, exp})
+	heap.Push(h, expItem{1, item, exp})
+}
+
+func (h *expHeap) addWithCount(count uint16, item string, exp mclock.AbsTime) {
+	heap.Push(h, expItem{count, item, exp})
 }
 
 // contains checks whether an item is present.
@@ -61,11 +66,30 @@ func (h *expHeap) expire(now mclock.AbsTime, onExp func(string)) {
 	}
 }
 
+// popItem removes an item from the heap and returns it.
+func (h *expHeap) popItem(item string) *expItem {
+	for i, v := range *h {
+		if v.item == item {
+			ret := heap.Remove(h, i).(expItem)
+			return &ret
+		}
+	}
+	return nil
+}
+
 // heap.Interface boilerplate
-func (h expHeap) Len() int            { return len(h) }
-func (h expHeap) Less(i, j int) bool  { return h[i].exp < h[j].exp }
-func (h expHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
-func (h *expHeap) Push(x interface{}) { *h = append(*h, x.(expItem)) }
+func (h expHeap) Len() int {
+	return len(h)
+}
+func (h expHeap) Less(i, j int) bool {
+	return h[i].exp < h[j].exp
+}
+func (h expHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+func (h *expHeap) Push(x interface{}) {
+	*h = append(*h, x.(expItem))
+}
 func (h *expHeap) Pop() interface{} {
 	old := *h
 	n := len(old)

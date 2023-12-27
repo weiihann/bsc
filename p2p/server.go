@@ -59,6 +59,9 @@ const (
 	// This time limits inbound connection attempts per source IP.
 	inboundThrottleTime = 30 * time.Second
 
+	// Maximum number of backoff cycles for inbound connections (24 hours).
+	maxInboundThrottleBackOffCount = 2880
+
 	// Maximum time allowed for reading a complete message.
 	// This is effectively the amount of time a connection can be idle.
 	frameReadTimeout = 30 * time.Second
@@ -225,7 +228,8 @@ type Server struct {
 	checkpointAddPeer       chan *conn
 
 	// State of run loop and listenLoop.
-	inboundHistory expHeap
+	inboundHistory   expHeap
+	inboundHistoryMu sync.Mutex
 }
 
 type peerOpFunc func(map[enode.ID]*Peer)
@@ -837,6 +841,28 @@ running:
 			// A peer disconnected.
 			d := common.PrettyDuration(mclock.Now() - pd.created)
 			delete(peers, pd.ID())
+
+			// Increase inbound throttle time if the node explicitly disconnect the peer
+			peerIP := pd.Node().IP().String()
+			if !pd.requested && pd.err == DiscRequested {
+				srv.inboundHistoryMu.Lock()
+				var expCount uint16
+
+				expInfo := srv.inboundHistory.popItem(peerIP)
+				if expInfo != nil {
+					expCount = expInfo.count
+				}
+
+				if expCount < maxInboundThrottleBackOffCount {
+					expCount += 1
+				}
+
+				// TODO(w): remove this
+				srv.log.Info("Increasing inbound throttle time", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err, "expCount", expCount)
+				srv.inboundHistory.addWithCount(expCount, peerIP, srv.clock.Now().Add(inboundThrottleTime*time.Duration(expCount)))
+				srv.inboundHistoryMu.Unlock()
+			}
+
 			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
 			if pd.Inbound() {
@@ -964,6 +990,9 @@ func (srv *Server) listenLoop() {
 }
 
 func (srv *Server) checkInboundConn(remoteIP net.IP) error {
+	srv.inboundHistoryMu.Lock()
+	defer srv.inboundHistoryMu.Unlock()
+
 	if remoteIP == nil {
 		return nil
 	}
