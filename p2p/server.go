@@ -225,7 +225,32 @@ type Server struct {
 	checkpointAddPeer       chan *conn
 
 	// State of run loop and listenLoop.
-	inboundHistory expHeap
+	inboundHistory  expHeap
+	disconnectIPSet *disconnectIPSet
+}
+
+type disconnectIPSet struct {
+	ips map[string]struct{}
+	mu  sync.RWMutex
+}
+
+func newDisconnectIPSet() *disconnectIPSet {
+	return &disconnectIPSet{ips: make(map[string]struct{})}
+}
+
+func (s *disconnectIPSet) add(ip string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.ips[ip] = struct{}{}
+}
+
+func (s *disconnectIPSet) contains(ip string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	_, ok := s.ips[ip]
+	return ok
 }
 
 type peerOpFunc func(map[enode.ID]*Peer)
@@ -513,6 +538,7 @@ func (srv *Server) Start() (err error) {
 	srv.removetrusted = make(chan *enode.Node)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
+	srv.disconnectIPSet = newDisconnectIPSet()
 
 	if err := srv.setupLocalNode(); err != nil {
 		return err
@@ -836,6 +862,9 @@ running:
 		case pd := <-srv.delpeer:
 			// A peer disconnected.
 			d := common.PrettyDuration(mclock.Now() - pd.created)
+			if !pd.requested && pd.err == DiscRequested {
+				srv.disconnectIPSet.add(pd.Node().IP().String())
+			}
 			delete(peers, pd.ID())
 			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
@@ -967,6 +996,12 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	if remoteIP == nil {
 		return nil
 	}
+
+	// Reject connections which were explicitly disconnected.
+	if srv.disconnectIPSet.contains(remoteIP.String()) {
+		return fmt.Errorf("explicitly disconnected previously")
+	}
+
 	// Reject connections that do not match NetRestrict.
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
 		return fmt.Errorf("not in netrestrict list")
