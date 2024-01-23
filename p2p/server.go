@@ -138,6 +138,9 @@ type Config struct {
 	// allowed to connect, even above the peer limit.
 	TrustedNodes []*enode.Node
 
+	// Blacklist nodes are used to prevent connections to specific nodes.
+	BlacklistNodes []*enode.Node
+
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
 	// IP networks contained in the list are considered.
@@ -912,6 +915,12 @@ func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *
 
 	if _, ok := srv.disconnectEnodeSet[c.node.ID()]; ok {
 		return errors.New("explicitly disconnected peer previously")
+	}
+
+	for _, n := range srv.BlacklistNodes {
+		if c.node.ID() == n.ID() {
+			return errors.New("peer is blacklisted")
+		}
 	}
 
 	// Repeat the post-handshake checks because the
