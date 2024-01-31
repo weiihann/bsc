@@ -327,7 +327,6 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 				underpriced++
 
 			default:
-				log.Info("Adding txs failed", "err", err)
 				otherreject++
 			}
 			added = append(added, batch[j].Hash())
