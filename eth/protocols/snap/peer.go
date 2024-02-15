@@ -73,8 +73,9 @@ func (p *Peer) Log() log.Logger {
 
 // RequestAccountRange fetches a batch of accounts rooted in a specific account
 // trie, starting with the origin.
+// TODO(w): 7.6.6.1.1 RequestAccountRange
 func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin, limit common.Hash, bytes uint64) error {
-	p.logger.Trace("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "limit", limit, "bytes", common.StorageSize(bytes))
+	p.logger.Info("Fetching range of accounts", "reqid", id, "root", root, "origin", origin, "limit", limit, "bytes", common.StorageSize(bytes))
 
 	requestTracker.Track(p.id, p.version, GetAccountRangeMsg, AccountRangeMsg, id)
 	return p2p.Send(p.rw, GetAccountRangeMsg, &GetAccountRangePacket{
@@ -89,11 +90,12 @@ func (p *Peer) RequestAccountRange(id uint64, root common.Hash, origin, limit co
 // RequestStorageRanges fetches a batch of storage slots belonging to one or more
 // accounts. If slots from only one account is requested, an origin marker may also
 // be used to retrieve from there.
+// TODO(w): 7.6.6.3.1 RequestStorageRanges
 func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []common.Hash, origin, limit []byte, bytes uint64) error {
 	if len(accounts) == 1 && origin != nil {
-		p.logger.Trace("Fetching range of large storage slots", "reqid", id, "root", root, "account", accounts[0], "origin", common.BytesToHash(origin), "limit", common.BytesToHash(limit), "bytes", common.StorageSize(bytes))
+		p.logger.Info("Fetching range of large storage slots", "reqid", id, "root", root, "account", accounts[0], "origin", common.BytesToHash(origin), "limit", common.BytesToHash(limit), "bytes", common.StorageSize(bytes))
 	} else {
-		p.logger.Trace("Fetching ranges of small storage slots", "reqid", id, "root", root, "accounts", len(accounts), "first", accounts[0], "bytes", common.StorageSize(bytes))
+		p.logger.Info("Fetching ranges of small storage slots", "reqid", id, "root", root, "accounts", len(accounts), "first", accounts[0], "bytes", common.StorageSize(bytes))
 	}
 	requestTracker.Track(p.id, p.version, GetStorageRangesMsg, StorageRangesMsg, id)
 	return p2p.Send(p.rw, GetStorageRangesMsg, &GetStorageRangesPacket{
@@ -107,8 +109,9 @@ func (p *Peer) RequestStorageRanges(id uint64, root common.Hash, accounts []comm
 }
 
 // RequestByteCodes fetches a batch of bytecodes by hash.
+// TODO(w): 7.6.6.2.1 RequestByteCodes
 func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) error {
-	p.logger.Trace("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
+	p.logger.Info("Fetching set of byte codes", "reqid", id, "hashes", len(hashes), "bytes", common.StorageSize(bytes))
 
 	requestTracker.Track(p.id, p.version, GetByteCodesMsg, ByteCodesMsg, id)
 	return p2p.Send(p.rw, GetByteCodesMsg, &GetByteCodesPacket{
@@ -120,8 +123,9 @@ func (p *Peer) RequestByteCodes(id uint64, hashes []common.Hash, bytes uint64) e
 
 // RequestTrieNodes fetches a batch of account or storage trie nodes rooted in
 // a specific state trie.
+// TODO(w): 7.6.6.4.1 RequestTrieNodes
 func (p *Peer) RequestTrieNodes(id uint64, root common.Hash, paths []TrieNodePathSet, bytes uint64) error {
-	p.logger.Trace("Fetching set of trie nodes", "reqid", id, "root", root, "pathsets", len(paths), "bytes", common.StorageSize(bytes))
+	p.logger.Info("Fetching set of trie nodes", "reqid", id, "root", root, "pathsets", len(paths), "bytes", common.StorageSize(bytes))
 
 	requestTracker.Track(p.id, p.version, GetTrieNodesMsg, TrieNodesMsg, id)
 	return p2p.Send(p.rw, GetTrieNodesMsg, &GetTrieNodesPacket{

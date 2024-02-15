@@ -332,6 +332,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 
 // LegacySync tries to sync up our local blockchain with a remote peer, both
 // adding various sanity checks and wrapping it with various log entries.
+// TODO(w): 5. LegacySync
 func (d *Downloader) LegacySync(id string, head common.Hash, td *big.Int, ttd *big.Int, mode SyncMode) error {
 	err := d.synchronise(id, head, td, ttd, mode, false, nil)
 
@@ -359,12 +360,14 @@ func (d *Downloader) LegacySync(id string, head common.Hash, td *big.Int, ttd *b
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
+// TODO(w): 6. synchronise
 func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, mode SyncMode, beaconMode bool, beaconPing chan struct{}) error {
 	// The beacon header syncer is async. It will start this synchronization and
 	// will continue doing other tasks. However, if synchronization needs to be
 	// cancelled, the syncer needs to know if we reached the startup point (and
 	// inited the cancel channel) or not yet. Make sure that we'll signal even in
 	// case of a failure.
+	log.Info("synchronise", "id", id, "hash", hash, "td", td, "ttd", ttd, "mode", mode, "beacon", beaconMode)
 	if beaconPing != nil {
 		defer func() {
 			select {
@@ -444,7 +447,9 @@ func (d *Downloader) getMode() SyncMode {
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
+// TODO(w): 7. syncWithPeer
 func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *big.Int, beaconMode bool) (err error) {
+	log.Info("syncWithPeer", "peer", p.id, "hash", hash, "td", td, "ttd", ttd, "beacon", beaconMode)
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -671,6 +676,7 @@ func (d *Downloader) Terminate() {
 
 // fetchHead retrieves the head header and prior pivot block (if available) from
 // a remote peer.
+// TODO(w): 7.1.1 fetchHead, pivot is ideally HEAD-64
 func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *types.Header, err error) {
 	p.log.Debug("Retrieving remote chain head")
 	mode := d.getMode()
@@ -964,6 +970,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 // other peers are only accepted if they map cleanly to the skeleton. If no one
 // can fill in the skeleton - not even the origin peer - it's assumed invalid and
 // the origin is dropped.
+// TODO(w): 7.2.1 fetchHeaders
 func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, head uint64) error {
 	p.log.Debug("Directing header downloads", "origin", from)
 	defer p.log.Debug("Header download terminated")
@@ -1205,6 +1212,7 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 // fetchBodies iteratively downloads the scheduled block bodies, taking any
 // available peers, reserving a chunk of blocks for each, waiting for delivery
 // and also periodically checking for timeouts.
+// TODO(w): 7.3.1 fetchBodies
 func (d *Downloader) fetchBodies(from uint64, beaconMode bool) error {
 	log.Debug("Downloading block bodies", "origin", from)
 	err := d.concurrentFetch((*bodyQueue)(d), beaconMode)
@@ -1216,6 +1224,7 @@ func (d *Downloader) fetchBodies(from uint64, beaconMode bool) error {
 // fetchReceipts iteratively downloads the scheduled block receipts, taking any
 // available peers, reserving a chunk of receipts for each, waiting for delivery
 // and also periodically checking for timeouts.
+// TODO(w): 7.4.1 fetchReceipts
 func (d *Downloader) fetchReceipts(from uint64, beaconMode bool) error {
 	log.Debug("Downloading receipts", "origin", from)
 	err := d.concurrentFetch((*receiptQueue)(d), beaconMode)
@@ -1227,6 +1236,7 @@ func (d *Downloader) fetchReceipts(from uint64, beaconMode bool) error {
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
+// TODO(w): 7.5.1 processHeaders
 func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode bool) error {
 	// Keep a count of uncertain headers to roll back
 	var (
@@ -1461,6 +1471,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 
 // processSnapSyncContent takes fetch results from the queue and writes them to the
 // database. It also controls the synchronisation of state nodes of the pivot block.
+// TODO(w): 7.6.1 processSnapSyncContent
 func (d *Downloader) processSnapSyncContent() error {
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
@@ -1609,6 +1620,7 @@ func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, bef
 	return p, before, after
 }
 
+// TODO(w): 7.6.2 commitSnapSyncData
 func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *stateSync) error {
 	// Check for any early termination requests
 	if len(results) == 0 {

@@ -729,7 +729,7 @@ func (h *handler) Start(maxPeers int, maxPeersPerIP int) {
 
 	// start sync handlers
 	h.wg.Add(1)
-	go h.chainSync.loop()
+	go h.chainSync.loop() // TODO(w): 1. initialize sync loop here
 
 	// start peer handler tracker
 	h.wg.Add(1)

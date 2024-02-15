@@ -24,6 +24,7 @@ import (
 )
 
 // syncState starts downloading state with the given root hash.
+// TODO(w): 7.6.2
 func (d *Downloader) syncState(root common.Hash) *stateSync {
 	// Create the state sync
 	s := newStateSync(d, root)
@@ -42,6 +43,7 @@ func (d *Downloader) syncState(root common.Hash) *stateSync {
 
 // stateFetcher manages the active state sync and accepts requests
 // on its behalf.
+// TODO(w): 7.6.3 stateFetcher
 func (d *Downloader) stateFetcher() {
 	for {
 		select {
@@ -57,6 +59,7 @@ func (d *Downloader) stateFetcher() {
 
 // runStateSync runs a state synchronisation until it completes or another root
 // hash is requested to be switched over to.
+// TODO(w): 7.6.4 runStateSync
 func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 	log.Trace("State sync starting", "root", s.root)
 
@@ -102,6 +105,7 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 // run starts the task assignment and response processing loop, blocking until
 // it finishes, and finally notifying any goroutines waiting for the loop to
 // finish.
+// TODO(w): 7.6.5 run
 func (s *stateSync) run() {
 	close(s.started)
 	s.err = s.d.SnapSyncer.Sync(s.root, s.cancel)
