@@ -100,11 +100,11 @@ const (
 var (
 	// accountConcurrency is the number of chunks to split the account trie into
 	// to allow concurrent retrievals.
-	accountConcurrency = 16
+	accountConcurrency = 50
 
 	// storageConcurrency is the number of chunks to split the a large contract
 	// storage trie into to allow concurrent retrievals.
-	storageConcurrency = 16
+	storageConcurrency = 50
 )
 
 // ErrCancelled is returned from snap syncing if the operation was prematurely
@@ -569,6 +569,7 @@ func (s *Syncer) Unregister(id string) error {
 // with the given root and reconstruct the nodes based on the snapshot leaves.
 // Previously downloaded segments will not be redownloaded of fixed, rather any
 // errors will be healed after the leaves are fully accumulated.
+// TODO(w): 7.6.6 Sync
 func (s *Syncer) Sync(root common.Hash, cancel chan struct{}) error {
 	// Move the trie root from any previous value, revert stateless markers for
 	// any peers and initialize the syncer if it was not yet run
@@ -828,6 +829,7 @@ func (s *Syncer) loadSyncStatus() {
 	s.bytecodeHealSynced, s.bytecodeHealBytes = 0, 0
 
 	var next common.Hash
+	// step = (2^256 / accountConcurrency) - 1
 	step := new(big.Int).Sub(
 		new(big.Int).Div(
 			new(big.Int).Exp(common.Big2, common.Big256, nil),
@@ -981,6 +983,7 @@ func (s *Syncer) cleanStorageTasks() {
 
 // assignAccountTasks attempts to match idle peers to pending account range
 // retrievals.
+// TODO(w): 7.6.6.1 assignAccountTasks
 func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *accountRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -1068,7 +1071,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 				cap = minRequestSize
 			}
 			if err := peer.RequestAccountRange(reqid, root, req.origin, req.limit, uint64(cap)); err != nil {
-				peer.Log().Debug("Failed to request account range", "err", err)
+				peer.Log().Info("Failed to request account range", "err", err)
 				s.scheduleRevertAccountRequest(req)
 			}
 		})
@@ -1079,6 +1082,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 }
 
 // assignBytecodeTasks attempts to match idle peers to pending code retrievals.
+// TODO(w): 7.6.6.2 assignBytecodeTasks
 func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *bytecodeRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -1173,7 +1177,7 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 
 			// Attempt to send the remote request and revert if it fails
 			if err := peer.RequestByteCodes(reqid, hashes, maxRequestSize); err != nil {
-				log.Debug("Failed to request bytecodes", "err", err)
+				log.Info("Failed to request bytecodes", "err", err)
 				s.scheduleRevertBytecodeRequest(req)
 			}
 		})
@@ -1182,6 +1186,7 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 
 // assignStorageTasks attempts to match idle peers to pending storage range
 // retrievals.
+// TODO(w): 7.6.6.3 assignStorageTasks
 func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *storageRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -1325,7 +1330,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 				origin, limit = req.origin[:], req.limit[:]
 			}
 			if err := peer.RequestStorageRanges(reqid, root, accounts, origin, limit, uint64(cap)); err != nil {
-				log.Debug("Failed to request storage", "err", err)
+				log.Info("Failed to request storage", "err", err)
 				s.scheduleRevertStorageRequest(req)
 			}
 		})
@@ -1339,6 +1344,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 
 // assignTrienodeHealTasks attempts to match idle peers to trie node requests to
 // heal any trie errors caused by the snap sync's chunked retrieval model.
+// TODO(w): 7.6.6.4 assignTrienodeHealTasks
 func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fail chan *trienodeHealRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -1459,7 +1465,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 
 			// Attempt to send the remote request and revert if it fails
 			if err := peer.RequestTrieNodes(reqid, root, pathsets, maxRequestSize); err != nil {
-				log.Debug("Failed to request trienode healers", "err", err)
+				log.Info("Failed to request trienode healers", "err", err)
 				s.scheduleRevertTrienodeHealRequest(req)
 			}
 		})
@@ -1468,6 +1474,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 
 // assignBytecodeHealTasks attempts to match idle peers to bytecode requests to
 // heal any trie errors caused by the snap sync's chunked retrieval model.
+// TODO(w): 7.6.6.5 assignBytecodeHealTasks
 func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fail chan *bytecodeHealRequest, cancel chan struct{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -1849,6 +1856,7 @@ func (s *Syncer) revertBytecodeHealRequest(req *bytecodeHealRequest) {
 // processAccountResponse integrates an already validated account range response
 // into the account tasks.
 func (s *Syncer) processAccountResponse(res *accountResponse) {
+	log.Info("Processing account response", "len(hashes)", len(res.hashes), "len(accounts)", res.accounts)
 	// Switch the task from pending to filling
 	res.task.req = nil
 	res.task.res = res
@@ -1936,6 +1944,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 // processBytecodeResponse integrates an already validated bytecode response
 // into the account tasks.
 func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
+	log.Info("Processing bytecode response", "len(hashes)", len(res.hashes), "len(codes)", len(res.codes))
 	batch := s.db.NewBatch()
 
 	var (
@@ -1982,6 +1991,7 @@ func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 // processStorageResponse integrates an already validated storage response
 // into the account tasks.
 func (s *Syncer) processStorageResponse(res *storageResponse) {
+	log.Info("Processing storage response", "len(hashes)", len(res.hashes), "len(accounts)", len(res.accounts))
 	// Switch the subtask from pending to idle
 	if res.subTask != nil {
 		res.subTask.req = nil
@@ -2335,6 +2345,7 @@ func (s *Syncer) commitHealer(force bool) {
 // processBytecodeHealResponse integrates an already validated bytecode response
 // into the healer tasks.
 func (s *Syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
+	log.Info("Processing bytecode heal response", "len(hashes)", len(res.hashes), "len(codes)", len(res.codes))
 	for i, hash := range res.hashes {
 		node := res.codes[i]
 
