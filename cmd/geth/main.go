@@ -63,6 +63,7 @@ var (
 		utils.ExternalSignerFlag,
 		utils.NoUSBFlag, // deprecated
 		utils.DirectBroadcastFlag,
+		utils.ContractsFileFlag,
 		utils.DisableSnapProtocolFlag,
 		utils.EnableTrustProtocolFlag,
 		utils.PipeCommitFlag,

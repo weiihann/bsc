@@ -210,6 +210,11 @@ var (
 		Usage:    "Exits after block synchronisation completes",
 		Category: flags.EthCategory,
 	}
+	ContractsFileFlag = &cli.BoolFlag{
+		Name:     "contracts-file",
+		Usage:    "Contains a list of contract accounts, the format is similar to the output `snapshot dump`",
+		Category: flags.DevCategory,
+	}
 	// hbss2pbss command options
 	ForceFlag = &cli.BoolFlag{
 		Name:  "force",

@@ -291,3 +291,35 @@ func (inspect *Inspector) DisplayResult() {
 	fmt.Printf("Contract Trie, total trie num: %v, ShortNodeCnt: %v, FullNodeCnt: %v, ValueNodeCnt: %v\n",
 		contractTrieCnt, totalContactsNodeStat.ShortNodeCnt, totalContactsNodeStat.FullNodeCnt, totalContactsNodeStat.ValueNodeCnt)
 }
+
+func iterateContractTrieAndGetSize(tr *Trie, root node, size *atomic.Uint64, path []byte) {
+
+	if root == nil {
+		return
+	}
+
+	switch current := (root).(type) {
+	case *shortNode:
+		iterateContractTrieAndGetSize(tr, current.Val, size, append(path, current.Key...))
+	case *fullNode:
+		for idx, child := range current.Children {
+			if child == nil {
+				continue
+			}
+			iterateContractTrieAndGetSize(tr, child, size, append(path, byte(idx)))
+		}
+	case hashNode:
+		n, err := tr.resolveAndGetSize(current, path, size)
+		if err != nil {
+			fmt.Printf("resolve hash node error: %v, trie root: %v, path: %v\n", err, tr.Hash().String(), path)
+			return
+		}
+		iterateContractTrieAndGetSize(tr, n, size, path)
+		return
+	case valueNode:
+		if !hasTerm(path) {
+			break
+		}
+	}
+
+}
