@@ -96,6 +96,7 @@ func (l *trieLoader) OpenTrie(root common.Hash) (triestate.Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
+// TODO(W): OpenStorageTrie
 func (l *trieLoader) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (triestate.Trie, error) {
 	return New(StorageTrieID(stateRoot, addrHash, root), l.db)
 }

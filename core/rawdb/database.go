@@ -795,6 +795,30 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	return nil
 }
 
+func InspectContractSize(db ethdb.Database, accHash common.Hash) (common.StorageSize, uint64) {
+	buf := make([]byte, len(trieNodeStoragePrefix)+common.HashLength)
+	copy(buf, trieNodeStoragePrefix)
+	copy(buf[len(trieNodeStoragePrefix):], accHash[:])
+	it := db.NewIterator(buf, []byte{})
+	defer it.Release()
+
+	var (
+		total common.StorageSize
+		count uint64
+	)
+
+	for it.Next() {
+		var (
+			key  = it.Key()
+			size = common.StorageSize(len(key) + len(it.Value()))
+		)
+		total += size
+		count += 1
+	}
+
+	return total, count
+}
+
 // printChainMetadata prints out chain metadata to stderr.
 func printChainMetadata(db ethdb.KeyValueStore) {
 	fmt.Fprintf(os.Stderr, "Chain metadata\n")

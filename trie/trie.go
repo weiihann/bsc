@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -590,6 +591,16 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 		return nil, err
 	}
 	t.tracer.onRead(prefix, blob)
+	return mustDecodeNode(n, blob), nil
+}
+
+// Only used for contract trie, PBSS only
+func (t *Trie) resolveAndGetSize(n hashNode, prefix []byte, size *atomic.Uint64) (node, error) {
+	blob, err := t.reader.node(prefix, common.BytesToHash(n))
+	if err != nil {
+		return nil, err
+	}
+	size.Add(uint64(1 + 32 + len(prefix) + len(blob))) // prefix + account hash + path + val
 	return mustDecodeNode(n, blob), nil
 }
 

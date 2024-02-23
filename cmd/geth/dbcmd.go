@@ -17,7 +17,9 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -65,6 +67,7 @@ Remove blockchain and state databases`,
 			dbGetCmd,
 			dbDeleteCmd,
 			dbInspectTrieCmd,
+			dbInspectContractsCmd,
 			dbPutCmd,
 			dbGetSlotsCmd,
 			dbDumpFreezerIndex,
@@ -100,6 +103,18 @@ Remove blockchain and state databases`,
 		},
 		Usage:       "Inspect the MPT tree of the account and contract.",
 		Description: `This commands iterates the entrie WorldState.`,
+	}
+	dbInspectContractsCmd = &cli.Command{
+		Action:    inspectContracts,
+		Name:      "inspect-contracts",
+		ArgsUsage: "<contract-file>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.SyncModeFlag,
+			utils.ContractsFileFlag,
+		},
+		Usage:       "Obtain the data size of contract trie given a list of contract keys",
+		Description: `This commands reads the contract keys from the file, iterates each specified contract trie and aggregate the data size of each contract trie.`,
 	}
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
@@ -410,6 +425,77 @@ func inspectTrie(ctx *cli.Context) error {
 		theInspect.Run()
 		theInspect.DisplayResult()
 	}
+	return nil
+}
+
+func inspectContracts(ctx *cli.Context) error {
+	// Check arguments
+	if ctx.NArg() < 1 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+
+	if ctx.NArg() > 2 {
+		return fmt.Errorf("max 2 arguments: %v", ctx.Command.ArgsUsage)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true, false)
+	defer db.Close()
+
+	// Open contract file
+	filePath := ctx.Args().Get(0)
+	contractFile, _ := os.Open(filePath)
+	defer contractFile.Close()
+
+	scanner := bufio.NewScanner(contractFile)
+
+	type Data struct {
+		Key  string `json:"key"`
+		Root string `json:"root"`
+	}
+
+	checkLine := func(line string) (*Data, error) {
+		var data Data
+		err := json.Unmarshal([]byte(line), &data)
+		if err != nil {
+			return nil, err
+		}
+		return &data, nil
+	}
+
+	var (
+		totalSize  common.StorageSize
+		totalNodes uint64
+		start      = time.Now()
+	)
+
+	// Read line by line
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		data, err := checkLine(line)
+		if err != nil {
+			fmt.Errorf("failed to parse contract data, line: %v, err: %v", line, err)
+			continue
+		}
+		if data == nil {
+			fmt.Errorf("failed to parse contract data, line: %v", line)
+			continue
+		}
+
+		// Iterate through the contract trie, get the data size
+		contractSize, contractNodes := rawdb.InspectContractSize(db, common.HexToHash(data.Key))
+		totalSize += contractSize
+		totalNodes += contractNodes
+
+		fmt.Printf("contract: %v, size: %v, count: %v, elapsed: %v\n", data.Key, contractSize.String(), contractNodes, common.PrettyDuration(time.Since(start)))
+	}
+
+	// Output the result
+	fmt.Printf("Total contract size: %v\n", totalSize.String())
+	fmt.Printf("Total contract nodes: %v\n", totalNodes)
 	return nil
 }
 
