@@ -118,6 +118,9 @@ var (
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
 
+	SnapshotAccountMetaPrefix = []byte("m") // SnapshotAccountMetaPrefix + account hash -> account meta trie value
+	SnapshotStorageMetaPrefix = []byte("y") // SnapshotStorageMetaPrefix + account hash + storage hash -> storage meta trie value
+
 	// difflayer database
 	diffLayerPrefix = []byte("d") // diffLayerPrefix + hash  -> diffLayer
 
@@ -217,6 +220,18 @@ func accountSnapshotKey(hash common.Hash) []byte {
 func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
 	buf := make([]byte, len(SnapshotStoragePrefix)+common.HashLength+common.HashLength)
 	n := copy(buf, SnapshotStoragePrefix)
+	n += copy(buf[n:], accountHash.Bytes())
+	copy(buf[n:], storageHash.Bytes())
+	return buf
+}
+
+func accountSnapshotKeyMeta(hash common.Hash) []byte {
+	return append(SnapshotAccountMetaPrefix, hash.Bytes()...)
+}
+
+func storageSnapshotKeyMeta(accountHash, storageHash common.Hash) []byte {
+	buf := make([]byte, len(SnapshotStorageMetaPrefix)+common.HashLength+common.HashLength)
+	n := copy(buf, SnapshotStorageMetaPrefix)
 	n += copy(buf[n:], accountHash.Bytes())
 	copy(buf[n:], storageHash.Bytes())
 	return buf
