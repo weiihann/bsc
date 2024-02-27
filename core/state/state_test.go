@@ -37,14 +37,14 @@ type stateEnv struct {
 
 func newStateEnv() *stateEnv {
 	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(types.EmptyRootHash, NewDatabase(db), nil)
+	sdb, _ := New(types.EmptyRootHash, NewDatabase(db), nil, 0)
 	return &stateEnv{db: db, state: sdb}
 }
 
 func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	tdb := NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
-	sdb, _ := New(types.EmptyRootHash, tdb, nil)
+	sdb, _ := New(types.EmptyRootHash, tdb, nil, 0)
 	s := &stateEnv{db: db, state: sdb}
 
 	// generate a few entries
@@ -63,7 +63,7 @@ func TestDump(t *testing.T) {
 	root, _, _ := s.state.Commit(0, nil)
 
 	// check that DumpToCollector contains the state objects that are in trie
-	s.state, _ = New(root, tdb, nil)
+	s.state, _ = New(root, tdb, nil, 0)
 	got := string(s.state.Dump(nil))
 	want := `{
     "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
@@ -100,7 +100,7 @@ func TestDump(t *testing.T) {
 func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	tdb := NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
-	sdb, _ := New(types.EmptyRootHash, tdb, nil)
+	sdb, _ := New(types.EmptyRootHash, tdb, nil, 0)
 	s := &stateEnv{db: db, state: sdb}
 
 	// generate a few entries
@@ -119,7 +119,7 @@ func TestIterativeDump(t *testing.T) {
 	s.state.Finalise(false)
 	s.state.AccountsIntermediateRoot()
 	root, _, _ := s.state.Commit(0, nil)
-	s.state, _ = New(root, tdb, nil)
+	s.state, _ = New(root, tdb, nil, 0)
 
 	b := &bytes.Buffer{}
 	s.state.IterativeDump(nil, json.NewEncoder(b))
@@ -197,7 +197,7 @@ func TestSnapshotEmpty(t *testing.T) {
 }
 
 func TestSnapshot2(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil, 0)
 
 	stateobjaddr0 := common.BytesToAddress([]byte("so0"))
 	stateobjaddr1 := common.BytesToAddress([]byte("so1"))
@@ -221,7 +221,7 @@ func TestSnapshot2(t *testing.T) {
 	state.Finalise(false)
 	state.AccountsIntermediateRoot()
 	root, _, _ := state.Commit(0, nil)
-	state, _ = New(root, state.db, state.snaps)
+	state, _ = New(root, state.db, state.snaps, 0)
 
 	// and one with deleted == true
 	so1 := state.getStateObject(stateobjaddr1)
