@@ -219,7 +219,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 	if logs := rlpHash(statedb.Logs()); logs != common.Hash(post.Logs) {
 		return fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
-	statedb, _ = state.New(root, statedb.Database(), snaps)
+	statedb, _ = state.New(root, statedb.Database(), snaps, 0)
 	return nil
 }
 
@@ -317,7 +317,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 	}
 	triedb := trie.NewDatabase(db, tconf)
 	sdb := state.NewDatabaseWithNodeDB(db, triedb)
-	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
+	statedb, _ := state.New(types.EmptyRootHash, sdb, nil, 0)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -341,7 +341,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, sdb.TrieDB(), root, 128, false)
 	}
-	statedb, _ = state.New(root, sdb, snaps)
+	statedb, _ = state.New(root, sdb, snaps, 0)
 	return triedb, snaps, statedb
 }
 
