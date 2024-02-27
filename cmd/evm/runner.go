@@ -150,7 +150,7 @@ func runCmd(ctx *cli.Context) error {
 		defer triedb.Close()
 		genesis := gen.MustCommit(db, triedb)
 		sdb := state.NewDatabaseWithNodeDB(db, triedb)
-		statedb, _ = state.New(genesis.Root(), sdb, nil)
+		statedb, _ = state.New(genesis.Root(), sdb, nil, 0)
 		chainConfig = gen.Config
 	} else {
 		db := rawdb.NewMemoryDatabase()
@@ -160,7 +160,7 @@ func runCmd(ctx *cli.Context) error {
 		})
 		defer triedb.Close()
 		sdb := state.NewDatabaseWithNodeDB(db, triedb)
-		statedb, _ = state.New(types.EmptyRootHash, sdb, nil)
+		statedb, _ = state.New(types.EmptyRootHash, sdb, nil, 0)
 		genesisConfig = new(core.Genesis)
 	}
 	if ctx.String(SenderFlag.Name) != "" {
