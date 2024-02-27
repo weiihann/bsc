@@ -765,6 +765,10 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 // nil for a deleted state object, it returns the actual object with the deleted
 // flag set. This is needed by the state journal to revert to the correct s-
 // destructed object instead of wiping all knowledge about the state object.
+
+// TODO(w): getDeletedStateObject guarantees that all state objects are
+// stored in the s.stateObjects, regardless whether it is read or write operation.
+// So s.stateObjects can be used to update snapshot metadata for accounts.
 func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
