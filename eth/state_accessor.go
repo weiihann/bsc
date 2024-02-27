@@ -53,7 +53,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// The state is available in live database, create a reference
 		// on top to prevent garbage collection and return a release
 		// function to deref it.
-		if statedb, err = eth.blockchain.StateAt(block.Root()); err == nil {
+		if statedb, err = eth.blockchain.StateAt(block.Root(), block.NumberU64()); err == nil {
 			eth.blockchain.TrieDB().Reference(block.Root(), common.Hash{})
 			return statedb, func() {
 				eth.blockchain.TrieDB().Dereference(block.Root())
@@ -70,7 +70,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
 			database = state.NewDatabaseWithConfig(eth.chainDb, trie.HashDefaults)
-			if statedb, err = state.New(block.Root(), database, nil); err == nil {
+			if statedb, err = state.New(block.Root(), database, nil, block.NumberU64()); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
 			}
@@ -96,7 +96,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// otherwise we would rewind past a persisted block (specific corner case is
 		// chain tracing from the genesis).
 		if !readOnly {
-			statedb, err = state.New(current.Root(), database, nil)
+			statedb, err = state.New(current.Root(), database, nil, current.NumberU64())
 			if err == nil {
 				return statedb, noopReleaser, nil
 			}
@@ -115,7 +115,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			}
 			current = parent
 
-			statedb, err = state.New(current.Root(), database, nil)
+			statedb, err = state.New(current.Root(), database, nil, current.NumberU64())
 			if err == nil {
 				break
 			}
@@ -162,7 +162,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
 		}
-		statedb, err = state.New(root, database, nil) // nolint:staticcheck
+		statedb, err = state.New(root, database, nil, current.NumberU64()) // nolint:staticcheck
 		if err != nil {
 			return nil, nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}
@@ -183,7 +183,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 
 func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), error) {
 	// Check if the requested state is available in the live chain.
-	statedb, err := eth.blockchain.StateAt(block.Root())
+	statedb, err := eth.blockchain.StateAt(block.Root(), block.Number().Uint64())
 	if err == nil {
 		return statedb, noopReleaser, nil
 	}
