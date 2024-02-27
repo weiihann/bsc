@@ -65,6 +65,7 @@ Remove blockchain and state databases`,
 			dbGetCmd,
 			dbDeleteCmd,
 			dbInspectTrieCmd,
+			dbInspectKVCmd,
 			dbPutCmd,
 			dbGetSlotsCmd,
 			dbDumpFreezerIndex,
@@ -101,6 +102,17 @@ Remove blockchain and state databases`,
 		Usage:       "Inspect the MPT tree of the account and contract.",
 		Description: `This commands iterates the entrie WorldState.`,
 	}
+	dbInspectKVCmd = &cli.Command{
+		Action:    inspectKV,
+		Name:      "inspect-kv",
+		ArgsUsage: "<range>",
+		Flags: flags.Merge([]cli.Flag{
+			utils.SyncModeFlag,
+		}, utils.NetworkFlags, utils.DatabasePathFlags),
+		Usage:       "Inspect the the number of key-value pairs accessed from genesis block to the latest block",
+		Description: `This commands iterates the entire database. The default range is from the genesis block to the latest block.`,
+	}
+
 	dbCheckStateContentCmd = &cli.Command{
 		Action:    checkStateContent,
 		Name:      "check-state-content",
@@ -325,6 +337,49 @@ func confirmAndRemoveDB(database string, kind string) {
 		})
 		log.Info("Database successfully deleted", "path", database, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
+}
+
+func inspectKV(ctx *cli.Context) error {
+	if ctx.NArg() > 1 {
+		return fmt.Errorf("max 1 argument: %v", ctx.Command.ArgsUsage)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true, true)
+	defer db.Close()
+
+	var fromBlock, toBlock uint64
+	var bucketRange uint64
+
+	headerHash := rawdb.ReadHeadHeaderHash(db)
+	latestBlock := *(rawdb.ReadHeaderNumber(db, headerHash))
+	defaultBucketRange := uint64(5256000) // 6 months
+
+	fromBlock = 1
+	toBlock = latestBlock
+
+	if ctx.NArg() == 1 {
+		bucketRange, _ = strconv.ParseUint(ctx.Args().Get(0), 10, 64)
+	} else {
+		bucketRange = defaultBucketRange
+	}
+
+	if bucketRange > (toBlock - fromBlock + 1) {
+		return fmt.Errorf("bucketRange is larger than block range, bucketRange: %d, blockRange: %d", bucketRange, toBlock-fromBlock+1)
+	}
+
+	inspector, err := rawdb.NewMetaInspector(db, fromBlock, toBlock, bucketRange)
+	if err != nil {
+		fmt.Printf("fail to create meta inspector\n")
+		return err
+	}
+	inspector.Run()
+
+	inspector.Display()
+
+	return nil
 }
 
 func inspectTrie(ctx *cli.Context) error {
