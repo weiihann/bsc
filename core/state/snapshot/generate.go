@@ -527,7 +527,7 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 			return nil
 		}
 		if write {
-			rawdb.WriteStorageSnapshot(ctx.batch, account, common.BytesToHash(key), val)
+			rawdb.WriteStorageSnapshot(ctx.batch, account, common.BytesToHash(key), val, 0)
 			snapGeneratedStorageMeter.Mark(1)
 		} else {
 			snapRecoveredStorageMeter.Mark(1)
@@ -597,7 +597,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			} else {
 				data := types.SlimAccountRLP(acc)
 				dataLen = len(data)
-				rawdb.WriteAccountSnapshot(ctx.batch, account, data)
+				rawdb.WriteAccountSnapshot(ctx.batch, account, data, 0)
 				snapGeneratedAccountMeter.Mark(1)
 			}
 			ctx.stats.storage += common.StorageSize(1 + common.HashLength + dataLen)
