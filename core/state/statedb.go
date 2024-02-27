@@ -172,7 +172,7 @@ type StateDB struct {
 
 // NewWithSharedPool creates a new state with sharedStorge on layer 1.5
 func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
-	statedb, err := New(root, db, snap, blockNum)
+	statedb, err := New(root, db, snaps, blockNum)
 	if err != nil {
 		return nil, err
 	}
