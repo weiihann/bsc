@@ -1161,6 +1161,8 @@ func (bc *BlockChain) stopWithoutSaving() {
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
 	bc.stopWithoutSaving()
+	statedb, _ := bc.State()
+	statedb.StopAnalyser()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
 	var snapBase common.Hash

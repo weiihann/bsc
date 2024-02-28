@@ -105,11 +105,6 @@ func (ka *keyValueAnalyser) writeToDB() error {
 			batch.Reset()
 		}
 	}
-	if err := batch.Write(); err != nil { // Write remaining data
-		log.Error("Failed to write account snapshot meta", "err", err)
-		ka.accountMu.Unlock()
-		return err
-	}
 	ka.accounts = make(map[common.Hash]uint64)
 	ka.accountMu.Unlock()
 
@@ -129,10 +124,12 @@ func (ka *keyValueAnalyser) writeToDB() error {
 		}
 	}
 	if err := batch.Write(); err != nil { // Write remaining data
-		log.Error("Failed to write storage snapshot meta", "err", err)
+		log.Error("Failed to write remaining snapshot meta", "err", err)
 		ka.storageMu.Unlock()
 		return err
 	}
+	batch.Reset()
+
 	ka.storages = make(map[common.Hash]map[common.Hash]uint64)
 	ka.storageMu.Unlock()
 
@@ -140,7 +137,5 @@ func (ka *keyValueAnalyser) writeToDB() error {
 }
 
 func (ka *keyValueAnalyser) Close() {
-	close(ka.mainMsgChan)
-	close(ka.flushChan)
 	close(ka.closeChan)
 }

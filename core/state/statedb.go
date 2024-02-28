@@ -1607,6 +1607,10 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 		nodes       = trienode.NewMergedNodeSet()
 	)
 
+	if s.analyser != nil {
+		s.analyser.flushChan <- struct{}{}
+	}
+
 	if s.snap != nil {
 		diffLayer = &types.DiffLayer{}
 	}
