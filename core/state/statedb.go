@@ -86,6 +86,9 @@ type StateDB struct {
 	snaps          *snapshot.Tree    // Nil if snapshot is not available
 	snap           snapshot.Snapshot // Nil if snapshot is not available
 
+	analyser   *keyValueAnalyser
+	analyserMu sync.Mutex
+
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
 	originalRoot common.Hash
@@ -201,6 +204,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 		BlockNum:             blockNum,
+		analyser:             NewKeyValueAnalyser(db),
 	}
 
 	if sdb.snaps != nil {
@@ -499,6 +503,7 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 
 // GetState retrieves a value from the given account's storage trie.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
+	s.analyser.mainMsgChan <- &keyToBlockNumMsg{addr: crypto.HashData(s.hasher, addr.Bytes()), key: hash, blockNum: s.BlockNum}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.GetState(hash)
@@ -770,6 +775,8 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 // stored in the s.stateObjects, regardless whether it is read or write operation.
 // So s.stateObjects can be used to update snapshot metadata for accounts.
 func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
+	hashAddr := crypto.HashData(s.hasher, addr.Bytes())
+	s.analyser.mainMsgChan <- &keyToBlockNumMsg{addr: hashAddr, key: common.Hash{}, blockNum: s.BlockNum}
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
@@ -778,7 +785,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	var data *types.StateAccount
 	if s.snap != nil {
 		start := time.Now()
-		acc, err := s.snap.Account(crypto.HashData(s.hasher, addr.Bytes()))
+		acc, err := s.snap.Account(hashAddr)
 		if metrics.EnabledExpensive {
 			s.SnapshotAccountReads += time.Since(start)
 		}
@@ -988,8 +995,10 @@ func (s *StateDB) copyInternal(doPrefetch bool) *StateDB {
 		// to the snapshot tree, we need to copy that as well. Otherwise, any
 		// block mined by ourselves will cause gaps in the tree, and force the
 		// miner to operate trie-backed only.
-		snaps: s.snaps,
-		snap:  s.snap,
+		snaps:    s.snaps,
+		snap:     s.snap,
+		BlockNum: s.BlockNum,
+		analyser: s.analyser,
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -1586,6 +1595,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		s.StopPrefetcher()
+		s.StopAnalyser()
 		return common.Hash{}, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
@@ -1784,6 +1794,7 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 			return nil
 		},
 		func() error {
+			// TODO(w): update snapshot here
 			// If snapshotting is enabled, update the snapshot tree with this new version
 			if s.snap != nil {
 				if metrics.EnabledExpensive {
@@ -1990,6 +2001,13 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 func (s *StateDB) GetStorage(address common.Address) *sync.Map {
 	return s.storagePool.getStorage(address)
+}
+
+func (s *StateDB) StopAnalyser() {
+	s.analyserMu.Lock()
+	s.analyser.Close()
+	s.analyser = nil
+	s.analyserMu.Unlock()
 }
 
 // convertAccountSet converts a provided account set from address keyed to hash keyed.
