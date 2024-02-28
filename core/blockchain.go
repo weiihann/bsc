@@ -1576,6 +1576,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
 		state.StopPrefetcher()
+		state.StopAnalyser()
 		return consensus.ErrUnknownAncestor
 	}
 	// Make sure no inconsistent state is leaked during insertion
@@ -2048,6 +2049,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			statedb.StopPrefetcher()
+			statedb.StopAnalyser()
 			return it.index, err
 		}
 		ptime := time.Since(pstart)
@@ -2058,6 +2060,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			log.Error("validate state failed", "error", err)
 			bc.reportBlock(block, receipts, err)
 			statedb.StopPrefetcher()
+			statedb.StopAnalyser()
 			return it.index, err
 		}
 		vtime := time.Since(vstart)

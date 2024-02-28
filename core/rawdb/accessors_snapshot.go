@@ -99,8 +99,6 @@ func WriteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash, entry []byt
 	if err := db.Put(accountSnapshotKey(hash), entry); err != nil {
 		log.Crit("Failed to store account snapshot", "err", err)
 	}
-
-	WriteAccountSnapshotMeta(db, hash, blockNum)
 }
 
 // DeleteAccountSnapshot removes the snapshot entry of an account trie leaf.

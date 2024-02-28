@@ -115,6 +115,7 @@ func (env *environment) discard() {
 		return
 	}
 	env.state.StopPrefetcher()
+	env.state.StopAnalyser()
 }
 
 // task contains all information for consensus engine sealing and result submitting.
