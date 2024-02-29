@@ -202,7 +202,7 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, sdb, snaps, 0)
+		state, err := New(root, sdb, snaps, 0, nil)
 		if err != nil {
 			panic(err)
 		}

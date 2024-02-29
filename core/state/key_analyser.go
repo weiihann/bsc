@@ -19,8 +19,8 @@ type keyToBlockNumMsg struct {
 	blockNum uint64
 }
 
-type keyValueAnalyser struct {
-	db Database
+type KeyValueAnalyser struct {
+	db ethdb.Database
 
 	mainMsgChan chan *keyToBlockNumMsg
 	flushChan   chan struct{}
@@ -32,8 +32,8 @@ type keyValueAnalyser struct {
 	storages  map[common.Hash]map[common.Hash]uint64
 }
 
-func NewKeyValueAnalyser(db Database) *keyValueAnalyser {
-	ka := &keyValueAnalyser{
+func NewKeyValueAnalyser(db ethdb.Database) *KeyValueAnalyser {
+	ka := &KeyValueAnalyser{
 		db:          db,
 		mainMsgChan: make(chan *keyToBlockNumMsg),
 		flushChan:   make(chan struct{}),
@@ -46,7 +46,7 @@ func NewKeyValueAnalyser(db Database) *keyValueAnalyser {
 	return ka
 }
 
-func (ka *keyValueAnalyser) Start() {
+func (ka *KeyValueAnalyser) Start() {
 	for {
 		select {
 		case msg := <-ka.mainMsgChan:
@@ -57,14 +57,14 @@ func (ka *keyValueAnalyser) Start() {
 				return
 			}
 		case <-ka.closeChan:
-			log.Info("Closing keyValueAnalyser, flushing remaining data to db")
+			log.Info("Closing KeyValueAnalyser, flushing remaining data to db")
 			ka.writeToDB()
 			return
 		}
 	}
 }
 
-func (ka *keyValueAnalyser) addKey(msg *keyToBlockNumMsg) {
+func (ka *KeyValueAnalyser) addKey(msg *keyToBlockNumMsg) {
 	if msg.key == (common.Hash{}) { // access account
 		ka.accountMu.Lock()
 		defer ka.accountMu.Unlock()
@@ -89,8 +89,8 @@ func (ka *keyValueAnalyser) addKey(msg *keyToBlockNumMsg) {
 }
 
 // Flush the accounts and storages to the database, and clear the maps
-func (ka *keyValueAnalyser) writeToDB() error {
-	batch := ka.db.DiskDB().NewBatch()
+func (ka *KeyValueAnalyser) writeToDB() error {
+	batch := ka.db.NewBatch()
 
 	// Write account snapshot meta
 	ka.accountMu.Lock()
@@ -136,6 +136,6 @@ func (ka *keyValueAnalyser) writeToDB() error {
 	return nil
 }
 
-func (ka *keyValueAnalyser) Close() {
+func (ka *KeyValueAnalyser) Close() {
 	close(ka.closeChan)
 }

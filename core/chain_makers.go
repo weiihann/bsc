@@ -340,7 +340,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	defer triedb.Close()
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabaseWithNodeDB(db, triedb), nil, parent.NumberU64())
+		statedb, err := state.New(parent.Root(), state.NewDatabaseWithNodeDB(db, triedb), nil, parent.NumberU64(), nil)
 		if err != nil {
 			panic(err)
 		}
