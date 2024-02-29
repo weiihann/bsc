@@ -90,6 +90,7 @@ func (ka *KeyValueAnalyser) addKey(msg *keyToBlockNumMsg) {
 
 // Flush the accounts and storages to the database, and clear the maps
 func (ka *KeyValueAnalyser) writeToDB() error {
+	log.Info("Flushing data to db")
 	batch := ka.db.NewBatch()
 
 	// Write account snapshot meta
