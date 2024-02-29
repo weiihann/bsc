@@ -301,6 +301,7 @@ type BlockChain struct {
 
 	// monitor
 	doubleSignMonitor *monitor.DoubleSignMonitor
+	KeyValueAnalyser  *state.KeyValueAnalyser
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -364,6 +365,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		vmConfig:           vmConfig,
 		diffQueue:          prque.New[int64, *types.DiffLayer](nil),
 		diffQueueBuffer:    make(chan *types.DiffLayer),
+		KeyValueAnalyser:   state.NewKeyValueAnalyser(db),
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
@@ -1161,8 +1163,7 @@ func (bc *BlockChain) stopWithoutSaving() {
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
 	bc.stopWithoutSaving()
-	statedb, _ := bc.State()
-	statedb.StopAnalyser()
+	bc.KeyValueAnalyser.Close()
 
 	// Ensure that the entirety of the state snapshot is journalled to disk.
 	var snapBase common.Hash
@@ -1578,7 +1579,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
 		state.StopPrefetcher()
-		state.StopAnalyser()
 		return consensus.ErrUnknownAncestor
 	}
 	// Make sure no inconsistent state is leaked during insertion
@@ -2017,7 +2017,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.NewWithSharedPool(parent.Root, bc.stateCache, bc.snaps, parent.Number.Uint64())
+		statedb, err := state.NewWithSharedPool(parent.Root, bc.stateCache, bc.snaps, parent.Number.Uint64(), bc.KeyValueAnalyser)
 		if err != nil {
 			return it.index, err
 		}
@@ -2051,7 +2051,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			statedb.StopPrefetcher()
-			statedb.StopAnalyser()
 			return it.index, err
 		}
 		ptime := time.Since(pstart)
@@ -2062,7 +2061,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			log.Error("validate state failed", "error", err)
 			bc.reportBlock(block, receipts, err)
 			statedb.StopPrefetcher()
-			statedb.StopAnalyser()
 			return it.index, err
 		}
 		vtime := time.Since(vstart)

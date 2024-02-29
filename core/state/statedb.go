@@ -86,8 +86,7 @@ type StateDB struct {
 	snaps          *snapshot.Tree    // Nil if snapshot is not available
 	snap           snapshot.Snapshot // Nil if snapshot is not available
 
-	analyser   *keyValueAnalyser
-	analyserMu sync.Mutex
+	analyser *KeyValueAnalyser
 
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
@@ -174,8 +173,8 @@ type StateDB struct {
 }
 
 // NewWithSharedPool creates a new state with sharedStorge on layer 1.5
-func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
-	statedb, err := New(root, db, snaps, blockNum)
+func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64, keyValueAnalyser *KeyValueAnalyser) (*StateDB, error) {
+	statedb, err := New(root, db, snaps, blockNum, keyValueAnalyser)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +183,7 @@ func NewWithSharedPool(root common.Hash, db Database, snaps *snapshot.Tree, bloc
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (*StateDB, error) {
+func New(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64, keyValueAnalyser *KeyValueAnalyser) (*StateDB, error) {
 	sdb := &StateDB{
 		db:                   db,
 		originalRoot:         root,
@@ -204,7 +203,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree, blockNum uint64) (
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 		BlockNum:             blockNum,
-		analyser:             NewKeyValueAnalyser(db),
+		analyser:             keyValueAnalyser,
 	}
 
 	if sdb.snaps != nil {
@@ -503,7 +502,9 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 
 // GetState retrieves a value from the given account's storage trie.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
-	s.analyser.mainMsgChan <- &keyToBlockNumMsg{addr: crypto.HashData(s.hasher, addr.Bytes()), key: hash, blockNum: s.BlockNum}
+	if s.analyser != nil {
+		s.analyser.mainMsgChan <- &keyToBlockNumMsg{addr: crypto.HashData(s.hasher, addr.Bytes()), key: hash, blockNum: s.BlockNum}
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.GetState(hash)
@@ -776,8 +777,10 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 // So s.stateObjects can be used to update snapshot metadata for accounts.
 func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	hashAddr := crypto.HashData(s.hasher, addr.Bytes())
-	s.analyser.mainMsgChan <- &keyToBlockNumMsg{addr: hashAddr, key: common.Hash{}, blockNum: s.BlockNum}
-	// Prefer live objects if any is available
+	if s.analyser != nil {
+		s.analyser.mainMsgChan <- &keyToBlockNumMsg{addr: hashAddr, key: common.Hash{}, blockNum: s.BlockNum}
+	}
+	// Pr≈efer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
 	}
@@ -1595,7 +1598,6 @@ func (s *StateDB) Commit(block uint64, failPostCommitFunc func(), postCommitFunc
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		s.StopPrefetcher()
-		s.StopAnalyser()
 		return common.Hash{}, nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
@@ -2007,12 +2009,12 @@ func (s *StateDB) GetStorage(address common.Address) *sync.Map {
 	return s.storagePool.getStorage(address)
 }
 
-func (s *StateDB) StopAnalyser() {
-	s.analyserMu.Lock()
-	s.analyser.Close()
-	s.analyser = nil
-	s.analyserMu.Unlock()
-}
+// func (s *StateDB) StopAnalyser() {
+// 	s.analyserMu.Lock()
+// 	s.analyser.Close()
+// 	s.analyser = nil
+// 	s.analyserMu.Unlock()
+// }
 
 // convertAccountSet converts a provided account set from address keyed to hash keyed.
 func (s *StateDB) convertAccountSet(set map[common.Address]*types.StateAccount) map[common.Hash]struct{} {

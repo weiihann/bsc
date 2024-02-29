@@ -27,7 +27,7 @@ import (
 )
 
 func filledStateDB() *StateDB {
-	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil, 0)
+	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil, 0, nil)
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")

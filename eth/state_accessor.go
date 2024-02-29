@@ -70,7 +70,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
 			database = state.NewDatabaseWithConfig(eth.chainDb, trie.HashDefaults)
-			if statedb, err = state.New(block.Root(), database, nil, block.NumberU64()); err == nil {
+			if statedb, err = state.New(block.Root(), database, nil, block.NumberU64(), nil); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
 			}
@@ -96,7 +96,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// otherwise we would rewind past a persisted block (specific corner case is
 		// chain tracing from the genesis).
 		if !readOnly {
-			statedb, err = state.New(current.Root(), database, nil, current.NumberU64())
+			statedb, err = state.New(current.Root(), database, nil, current.NumberU64(), nil)
 			if err == nil {
 				return statedb, noopReleaser, nil
 			}
@@ -115,7 +115,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			}
 			current = parent
 
-			statedb, err = state.New(current.Root(), database, nil, current.NumberU64())
+			statedb, err = state.New(current.Root(), database, nil, current.NumberU64(), nil)
 			if err == nil {
 				break
 			}
@@ -162,7 +162,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
 		}
-		statedb, err = state.New(root, database, nil, current.NumberU64()) // nolint:staticcheck
+		statedb, err = state.New(root, database, nil, current.NumberU64(), nil) // nolint:staticcheck
 		if err != nil {
 			return nil, nil, fmt.Errorf("state reset after block %d failed: %v", current.NumberU64(), err)
 		}
