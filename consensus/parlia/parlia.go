@@ -228,6 +228,8 @@ type Parlia struct {
 	validatorSetABI            abi.ABI
 	slashABI                   abi.ABI
 
+	noVerifyValidators bool
+
 	// The fields below are for testing only
 	fakeDiff bool // Skip difficulty verifications
 }
@@ -1111,8 +1113,10 @@ func (p *Parlia) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 	}
 	// If the block is an epoch end block, verify the validator list
 	// The verification can only be done when the state is ready, it can't be done in VerifyHeader.
-	if err := p.verifyValidators(header); err != nil {
-		return err
+	if !p.noVerifyValidators {
+		if err := p.verifyValidators(header); err != nil {
+			return err
+		}
 	}
 
 	cx := chainContext{Chain: chain, parlia: p}
@@ -1798,6 +1802,10 @@ func (p *Parlia) GetFinalizedHeader(chain consensus.ChainHeaderReader, header *t
 	}
 
 	return chain.GetHeader(snap.Attestation.SourceHash, snap.Attestation.SourceNumber)
+}
+
+func (p *Parlia) SetNoVerifyValidators(cond bool) {
+	p.noVerifyValidators = cond
 }
 
 // ===========================     utility function        ==========================
