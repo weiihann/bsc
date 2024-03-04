@@ -84,6 +84,14 @@ func uint64ToBytes(num uint64) []byte {
 	return buf[:]
 }
 
+func ReadAccountSnapshotMeta(db ethdb.KeyValueReader, hash common.Hash) uint64 {
+	data, _ := db.Get(accountSnapshotKeyMeta(hash))
+	if len(data) != 8 {
+		return 0
+	}
+	return binary.BigEndian.Uint64(data)
+}
+
 func WriteAccountSnapshotMeta(db ethdb.KeyValueWriter, hash common.Hash, blockNum uint64) {
 	if blockNum == 0 {
 		return

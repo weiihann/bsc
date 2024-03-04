@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
 	cli "github.com/urfave/cli/v2"
 )
 
@@ -213,6 +215,19 @@ as the backend data source, making this command a lot faster.
 
 The argument is interpreted as block number or hash. If none is provided, the latest
 block is used.
+`,
+			},
+			{
+				Name:      "get-expired-ca",
+				Usage:     "Inspect the number of contract accounts that are only accessed before the specified block number",
+				ArgsUsage: "[blockNum]",
+				Action:    getExpiredCA,
+				Flags: flags.Merge([]cli.Flag{
+					utils.ExcludeCodeFlag,
+					utils.ExcludeStorageFlag,
+				}, utils.NetworkFlags, utils.DatabasePathFlags),
+				Description: `
+				This commands iterates the entire account snapshot. The default block number is latest block - 6 months (5184000).
 `,
 			},
 		},
@@ -902,6 +917,125 @@ func dumpState(ctx *cli.Context) error {
 		}
 	}
 	log.Info("Snapshot dumping complete", "accounts", accounts,
+		"elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+func getExpiredCA(ctx *cli.Context) error {
+	var targetBlock uint64
+
+	if ctx.NArg() > 1 {
+		return fmt.Errorf("max 1 argument: %v", ctx.Command.ArgsUsage)
+	}
+
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	var root common.Hash
+
+	header := &types.Header{}
+	db := utils.MakeChainDatabase(ctx, stack, true, false)
+	scheme, err := rawdb.ParseStateScheme(ctx.String(utils.StateSchemeFlag.Name), db)
+	if err != nil {
+		return err
+	}
+
+	headerHash := rawdb.ReadHeadBlockHash(db)
+	if headerHash == (common.Hash{}) {
+		return errors.New("no head block")
+	}
+
+	if ctx.NArg() == 1 {
+		targetBlock, _ = strconv.ParseUint(ctx.Args().First(), 10, 64)
+	} else {
+		latestBlock := *(rawdb.ReadHeaderNumber(db, headerHash))
+		if latestBlock < 5184000 {
+			return fmt.Errorf("latest block is too low: %d", latestBlock)
+		}
+		targetBlock = latestBlock - 5184000
+	}
+
+	if scheme == rawdb.PathScheme {
+		triedb := trie.NewDatabase(db, &trie.Config{PathDB: pathdb.ReadOnly})
+		defer triedb.Close()
+		if stateRoot := triedb.Head(); stateRoot != (common.Hash{}) {
+			header.Root = stateRoot
+		} else {
+			return fmt.Errorf("no top state root hash in path db")
+		}
+	}
+	root = header.Root
+
+	snapConfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	triesInMemory := ctx.Uint64(utils.TriesInMemoryFlag.Name)
+	snaptree, err := snapshot.New(snapConfig, db, trie.NewDatabase(db, nil), root, int(triesInMemory), false)
+	if err != nil {
+		return err
+	}
+	accIt, err := snaptree.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return err
+	}
+	defer accIt.Release()
+
+	log.Info("Analyzing snapshot started", "root", root)
+	var (
+		start    = time.Now()
+		logged   = time.Now()
+		accounts uint64
+		size     common.StorageSize
+	)
+	for accIt.Next() {
+		account, err := types.FullAccount(accIt.Account())
+		if err != nil {
+			return err
+		}
+		if bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) { // skip EOA
+			continue
+		}
+		if bytes.Equal(account.Root.Bytes(), types.EmptyRootHash[:]) { // skip empty root hash
+			continue
+		}
+		// Read meta
+		accBlockNum := rawdb.ReadAccountSnapshotMeta(db, accIt.Hash())
+		if err != nil {
+			log.Error("Failed to read account meta", "err", err)
+			return err
+		}
+
+		// Check if the account is stale
+		if accBlockNum > targetBlock {
+			if time.Since(logged) > 8*time.Second {
+				log.Info("Snapshot analyzing", "at", accIt.Hash(), "accounts", accounts,
+					"elapsed", common.PrettyDuration(time.Since(start)))
+				logged = time.Now()
+			}
+			continue
+		}
+
+		// Read storage
+		storageIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
+		if err != nil {
+			log.Error("Failed to open storage iterator", "err", err)
+			return err
+		}
+		for storageIt.Next() {
+			size += common.StorageSize(len(storageIt.Hash().Bytes()) + len(storageIt.Slot()))
+		}
+
+		accounts++
+		if time.Since(logged) > 8*time.Second {
+			log.Info("Snapshot analyzing", "at", accIt.Hash(), "accounts", accounts, "size", size.String(),
+				"elapsed", common.PrettyDuration(time.Since(start)))
+			logged = time.Now()
+		}
+	}
+	log.Info("Snapshot analyzing complete", "accounts", accounts, "size", size.String(),
 		"elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }
