@@ -52,13 +52,20 @@ func (ka *KeyValueAnalyser) Start() {
 		case msg := <-ka.mainMsgChan:
 			ka.addKey(msg)
 		case <-ka.flushChan:
+			log.Info("Flushing KeyValueAnalyser data to db")
 			err := ka.writeToDB()
 			if err != nil {
+				log.Error("Failed to flush KeyValueAnalyser data to db", "err", err)
 				return
 			}
 		case <-ka.closeChan:
 			log.Info("Closing KeyValueAnalyser, flushing remaining data to db")
-			ka.writeToDB()
+			err := ka.writeToDB()
+			close(ka.flushChan)
+			close(ka.mainMsgChan)
+			if err != nil {
+				log.Error("Failed to flush KeyValueAnalyser data to db", "err", err)
+			}
 			return
 		}
 	}
@@ -90,7 +97,6 @@ func (ka *KeyValueAnalyser) addKey(msg *keyToBlockNumMsg) {
 
 // Flush the accounts and storages to the database, and clear the maps
 func (ka *KeyValueAnalyser) writeToDB() error {
-	log.Info("Flushing data to db")
 	batch := ka.db.NewBatch()
 
 	// Write account snapshot meta
