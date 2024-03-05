@@ -77,6 +77,8 @@ func (st *insertStats) report(chain []*types.Block, index int, trieDiffNodes, tr
 		if st.ignored > 0 {
 			context = append(context, []interface{}{"ignored", st.ignored}...)
 		}
+		context = append(context, []interface{}{"accCount", accCount}...)
+		context = append(context, []interface{}{"storageCount", storageCount}...)
 		if setHead {
 			log.Info("Imported new chain segment", context...)
 		} else {
