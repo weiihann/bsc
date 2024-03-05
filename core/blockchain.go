@@ -2110,12 +2110,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		blockWriteTimer.Update(time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
 		blockInsertTimer.UpdateSince(start)
 
+		bc.KeyValueAnalyser.UpdateBlockCount()
+
 		// Report the import stats before returning the various results
 		stats.processed++
 		stats.usedGas += usedGas
 
 		trieDiffNodes, trieBufNodes, trieImmutableBufNodes, _ := bc.triedb.Size()
-		stats.report(chain, it.index, trieDiffNodes, trieBufNodes, trieImmutableBufNodes, setHead)
+		stats.report(chain, it.index, trieDiffNodes, trieBufNodes, trieImmutableBufNodes, setHead, bc.KeyValueAnalyser.GetAccountCount(), bc.KeyValueAnalyser.GetStorageCount())
 
 		if !setHead {
 			// After merge we expect few side chains. Simply count

@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	batchSize = 1000000
+	batchKeySize   = 100000
+	batchBlockSize = 50000
 )
 
 type keyToBlockNumMsg struct {
@@ -30,6 +31,8 @@ type KeyValueAnalyser struct {
 	storageMu sync.RWMutex
 	accounts  map[common.Hash]uint64
 	storages  map[common.Hash]map[common.Hash]uint64
+
+	blockCount uint64
 }
 
 func NewKeyValueAnalyser(db ethdb.Database) *KeyValueAnalyser {
@@ -40,6 +43,7 @@ func NewKeyValueAnalyser(db ethdb.Database) *KeyValueAnalyser {
 		closeChan:   make(chan struct{}),
 		accounts:    make(map[common.Hash]uint64),
 		storages:    make(map[common.Hash]map[common.Hash]uint64),
+		blockCount:  0,
 	}
 
 	go ka.Start()
@@ -90,7 +94,7 @@ func (ka *KeyValueAnalyser) addKey(msg *keyToBlockNumMsg) {
 		}
 	}
 
-	if len(ka.accounts)+len(ka.storages) >= batchSize {
+	if len(ka.accounts)+len(ka.storages) >= batchKeySize {
 		ka.flushChan <- struct{}{}
 	}
 }
@@ -145,4 +149,24 @@ func (ka *KeyValueAnalyser) writeToDB() error {
 
 func (ka *KeyValueAnalyser) Close() {
 	close(ka.closeChan)
+}
+
+func (ka *KeyValueAnalyser) GetAccountCount() int {
+	ka.accountMu.RLock()
+	defer ka.accountMu.RUnlock()
+	return len(ka.accounts)
+}
+
+func (ka *KeyValueAnalyser) GetStorageCount() int {
+	ka.storageMu.RLock()
+	defer ka.storageMu.RUnlock()
+	return len(ka.storages)
+}
+
+func (ka *KeyValueAnalyser) UpdateBlockCount() {
+	ka.blockCount++
+	if ka.blockCount >= batchBlockSize {
+		ka.flushChan <- struct{}{}
+		ka.blockCount = 0
+	}
 }
