@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	batchKeySize   = 100000
 	batchBlockSize = 50000
 )
 
@@ -78,13 +77,12 @@ func (ka *KeyValueAnalyser) Start() {
 func (ka *KeyValueAnalyser) addKey(msg *keyToBlockNumMsg) {
 	if msg.key == (common.Hash{}) { // access account
 		ka.accountMu.Lock()
-		defer ka.accountMu.Unlock()
 		if prev, exist := ka.accounts[msg.addr]; !exist || prev < msg.blockNum {
 			ka.accounts[msg.addr] = msg.blockNum
 		}
+		ka.accountMu.Unlock()
 	} else { // access storage
 		ka.storageMu.Lock()
-		defer ka.storageMu.Unlock()
 		if _, exist := ka.storages[msg.addr]; !exist {
 			ka.storages[msg.addr] = make(map[common.Hash]uint64)
 		}
@@ -92,10 +90,7 @@ func (ka *KeyValueAnalyser) addKey(msg *keyToBlockNumMsg) {
 		if prev, exist := ka.storages[msg.addr][msg.key]; !exist || prev < msg.blockNum {
 			ka.storages[msg.addr][msg.key] = msg.blockNum
 		}
-	}
-
-	if len(ka.accounts)+len(ka.storages) >= batchKeySize {
-		ka.flushChan <- struct{}{}
+		ka.storageMu.Unlock()
 	}
 }
 
