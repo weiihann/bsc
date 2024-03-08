@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	batchBlockSize = 20000
+	batchBlockSize = 10000
 )
 
 type keyToBlockNumMsg struct {
