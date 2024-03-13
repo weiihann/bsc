@@ -385,10 +385,16 @@ func (p *Peer) handle(msg Msg) error {
 		// ignore other base protocol messages
 		return msg.Discard()
 	default:
+		var peerInfo *PeerInfo
 		// it's a subprotocol message
 		proto, err := p.getProto(msg.Code)
 		if err != nil {
 			return fmt.Errorf("msg code out of range: %v", msg.Code)
+		}
+		if proto.Version == 67 {
+			// log peer info
+			peerInfo = p.Info()
+			log.Info("peer sending eth/67 message", "name", peerInfo.Name)
 		}
 		if metrics.Enabled {
 			m := fmt.Sprintf("%s/%s/%d/%#02x", ingressMeterName, proto.Name, proto.Version, msg.Code-proto.offset)
