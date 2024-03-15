@@ -86,6 +86,7 @@ WARNING: it's only supported in hash mode(--state.scheme=hash)".
 					utils.BlockAmountReserved,
 					utils.TriesInMemoryFlag,
 					utils.CheckSnapshotWithMPT,
+					utils.StateSchemeFlag,
 				},
 				Description: `
 geth offline prune-block for block data in ancientdb.
