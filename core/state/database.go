@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
@@ -156,7 +157,7 @@ func NewDatabase(db ethdb.Database) Database {
 // large memory cache.
 func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
 	noTries := config != nil && config.NoTries
-
+	log.Info("NewDatabaseWithConfig", "noTries", noTries)
 	return &cachingDB{
 		disk:          db,
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
@@ -169,6 +170,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
 // NewDatabaseWithNodeDB creates a state database with an already initialized node database.
 func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database {
 	noTries := triedb != nil && triedb.Config() != nil && triedb.Config().NoTries
+	log.Info("NewDatabaseWithNodeDB", "noTries", noTries)
 
 	return &cachingDB{
 		disk:          db,
