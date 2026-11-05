@@ -1194,21 +1194,11 @@ func (pool *LegacyPool) removeTx(hash common.Hash, outofbound bool, unreserve bo
 	}
 	// Remove the transaction from the pending lists and reset the account nonce
 	if pending := pool.pending[addr]; pending != nil {
-		if removed, invalids := pending.Remove(tx); removed {
+		if removed, _ := pending.Remove(tx); removed {
 			// If no more pending transactions are left, remove the list
 			if pending.Empty() {
 				delete(pool.pending, addr)
 			}
-			// Postpone any invalidated transactions
-			for _, tx := range invalids {
-				// Internal shuffle shouldn't touch the lookup set.
-				pool.enqueueTx(tx.Hash(), tx, false, false)
-			}
-			// Update the account nonce if needed
-			pool.pendingNonces.setIfLower(addr, tx.Nonce())
-			// Reduce the pending counter
-			pendingGauge.Dec(int64(1 + len(invalids)))
-			return 1 + len(invalids)
 		}
 	}
 	// Transaction is in the future queue
